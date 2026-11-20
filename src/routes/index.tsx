@@ -64,36 +64,78 @@ function Index() {
           height={1086}
         />
         <div className="hero-shade" />
-        <div className="container hero-content">
-          <div className="eyebrow">
-            <span className="h-px w-7 bg-gold" /> Small beginnings. Lasting change.
+        <div className="container hero-grid">
+          <div className="hero-content">
+            <div className="eyebrow">
+              <span className="h-px w-7 bg-gold" /> Small beginnings. Lasting change.
+            </div>
+            <h1>
+              Rabata.
+              <br />
+              Connecting education
+              <br />
+              with <em>opportunity.</em>
+            </h1>
+            <p className="hero-copy">
+              Every child deserves the chance to learn, grow and build a better future. In
+              Derabassi, Punjab, we pair free academic mentorship with life skills and complete
+              transparency.
+            </p>
+            <div className="hero-actions">
+              <Button asChild size="lg" variant="secondary">
+                <Link to="/student-registration">
+                  <BookOpen /> Learn with Rabata <ArrowRight />
+                </Link>
+              </Button>
+              <Button asChild size="lg" variant="hero">
+                <Link to="/volunteer">
+                  <Heart /> Volunteer with us
+                </Link>
+              </Button>
+            </div>
+            <div className="hero-note">
+              <ShieldCheck size={14} /> Free learning · Guardian-safe records · Open fund ledger
+            </div>
           </div>
-          <h1>
-            Rabata.
-            <br />
-            Connecting education
-            <br />
-            with <em>opportunity.</em>
-          </h1>
-          <p className="hero-copy">
-            Every child deserves the chance to learn, grow and build a better future. Together,
-            we’re making that chance a reality.
-          </p>
-          <div className="hero-actions">
-            <Button asChild size="lg" variant="secondary">
-              <Link to="/student-registration">
-                <BookOpen /> Learn with Rabata <ArrowRight />
-              </Link>
-            </Button>
-            <Button asChild size="lg" variant="hero">
-              <Link to="/volunteer">
-                <Heart /> Volunteer with us
-              </Link>
-            </Button>
-          </div>
-          <div className="hero-note">
-            <ShieldCheck size={13} /> Free learning. Real support. Every child matters.
-          </div>
+
+          <aside className="hero-glass-card" aria-label="Rabata live transparency snapshot">
+            <div className="eyebrow" style={{ marginBottom: 8 }}>
+              <ShieldCheck size={13} /> Transparent Grassroots Impact
+            </div>
+            <h2 style={{ fontSize: 22, color: "var(--primary-foreground)" }}>
+              Accountable to every child &amp; supporter
+            </h2>
+            <p className="text-xs opacity-80 mt-2">
+              Explore live verified fund allocations, subject-wise recorded classes, and
+              safeguarding-protected student progress tracking.
+            </p>
+            <div className="hero-glass-grid">
+              <div className="hero-glass-stat">
+                <strong>10–15</strong>
+                <span>Active Learners</span>
+              </div>
+              <div className="hero-glass-stat">
+                <strong>100%</strong>
+                <span>Free Mentorship</span>
+              </div>
+              <div className="hero-glass-stat">
+                <strong>{formatINR(fundSummary?.totalReceivedInr ?? 0)}</strong>
+                <span>Funds Recorded</span>
+              </div>
+              <div className="hero-glass-stat">
+                <strong>{formatINR(fundSummary?.totalSpentInr ?? 0)}</strong>
+                <span>Proof-Backed Spend</span>
+              </div>
+            </div>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <Button asChild size="sm" variant="secondary">
+                <Link to="/funds">Inspect Fund Ledger</Link>
+              </Button>
+              <Button asChild size="sm" variant="hero">
+                <Link to="/students">Academic Profiles</Link>
+              </Button>
+            </div>
+          </aside>
         </div>
         <span className="hero-caption">
           Rabata founder &amp; students learning together in Derabassi
@@ -103,21 +145,27 @@ function Index() {
       <section className="pillars">
         <div className="container pillars-inner">
           <div className="pillar">
-            <BookOpen />
+            <div className="pillar-icon">
+              <BookOpen />
+            </div>
             <div>
               <h3>Educate</h3>
               <p>Strong foundations. Open minds.</p>
             </div>
           </div>
           <div className="pillar">
-            <Sprout />
+            <div className="pillar-icon">
+              <Sprout />
+            </div>
             <div>
               <h3>Empower</h3>
               <p>Skills, confidence and self-belief.</p>
             </div>
           </div>
           <div className="pillar">
-            <GraduationCap />
+            <div className="pillar-icon">
+              <GraduationCap />
+            </div>
             <div>
               <h3>Elevate</h3>
               <p>From learning to a better life.</p>
@@ -149,19 +197,19 @@ function Index() {
             <div>
               <strong>10–15</strong>
               <span>children learning with us</span>
-              <small>As reported in our organization profile</small>
+              <small>Organization profile figure</small>
             </div>
             <div>
               <strong>100%</strong>
               <span>free educational support</span>
             </div>
             <div>
-              <strong>One</strong>
-              <span>community. Shared possibilities.</span>
+              <strong>6</strong>
+              <span>holistic skill dimensions</span>
             </div>
             <div>
-              <strong>Beyond</strong>
-              <span>textbooks. Towards life.</span>
+              <strong>Open</strong>
+              <span>bill-verified fund tracking</span>
             </div>
           </div>
         </div>
@@ -304,13 +352,13 @@ function Index() {
               <div className="card-icon">
                 <Users />
               </div>
-              <h3>Confidence for life</h3>
+              <h3>Personalised academic tracking</h3>
               <p>
-                Spoken English, communication and everyday skills that help young people find their
-                voice and believe in themselves.
+                Every learner receives an individual academic profile tracking subject marks,
+                attendance calendars, skills development and learning goals.
               </p>
-              <Link to="/skills" className="text-link">
-                Explore our programmes <ArrowRight size={14} />
+              <Link to="/students" className="text-link">
+                View academic tracking <ArrowRight size={14} />
               </Link>
             </article>
             <article className="program-card">

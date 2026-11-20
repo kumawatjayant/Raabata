@@ -45,7 +45,10 @@ export function Header() {
               <Instagram size={12} /> Follow our journey <ArrowUpRight size={11} />
             </a>
             <Link to="/account">
-              <ShieldCheck size={12} /> Portal &amp; Account
+              <ShieldCheck size={12} /> Member Portal
+            </Link>
+            <Link to="/admin">
+              <ShieldCheck size={12} /> Admin Console
             </Link>
           </span>
         </div>
