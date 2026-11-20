@@ -270,6 +270,11 @@ function Account() {
                 <Link to="/admin">Central Admin Console →</Link>
               </Button>
             )}
+            <Button asChild size="sm" variant="outline">
+              <Link to="/">
+                <ExternalLink size={13} /> Public Website
+              </Link>
+            </Button>
           </div>
         </header>
 

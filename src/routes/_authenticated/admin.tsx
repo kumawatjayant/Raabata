@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Award,
   Database,
@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  Search,
   ShieldCheck,
   UserCheck,
   Users,
@@ -35,21 +36,24 @@ import { fetchAccessibleStudentProfiles } from "@/lib/academic-profiles";
 import { listEnquiriesForAdmin, type AdminEnquiryItem } from "@/lib/enquiries.functions";
 import {
   getLocalDevSession,
+  isLocalDevHost,
   readLocalDb,
+  readLocalEnquiries,
   setLocalDevSession,
   shouldUseLocalMode,
 } from "@/lib/local-store";
-import type {
-  ActivityPhotoRow,
-  AssignmentRow,
-  FundAllocationRow,
-  FundAuditLogRow,
-  FundDonationRow,
-  MentorProfileRow,
-  ProgressLogRow,
-  RecordedLectureRow,
-  StudentRecordRow,
-  SuccessStoryRow,
+import {
+  formatINR,
+  type ActivityPhotoRow,
+  type AssignmentRow,
+  type FundAllocationRow,
+  type FundAuditLogRow,
+  type FundDonationRow,
+  type MentorProfileRow,
+  type ProgressLogRow,
+  type RecordedLectureRow,
+  type StudentRecordRow,
+  type SuccessStoryRow,
 } from "@/lib/platform";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -99,9 +103,27 @@ function Admin() {
   const [section, setSection] = useState<AdminSectionId>("overview");
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [cmdOpen, setCmdOpen] = useState(false);
+  const [cmdQuery, setCmdQuery] = useState("");
+  const [cmdIndex, setCmdIndex] = useState(0);
   const [msg, setMsg] = useState("");
   const [isErr, setIsErr] = useState(false);
   const fetchEnquiries = useServerFn(listEnquiriesForAdmin);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setCmdOpen((prev) => !prev);
+        setCmdQuery("");
+        setCmdIndex(0);
+      } else if (e.key === "Escape") {
+        setCmdOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const handleStatus = (text: string, err = false) => {
     setMsg(text);
@@ -142,7 +164,7 @@ function Admin() {
           userId: localSession.userId,
           roles: db.user_roles,
           names: Object.fromEntries(db.app_profiles.map((p) => [p.user_id, p.display_name])),
-          enquiries: [] as AdminEnquiryItem[],
+          enquiries: readLocalEnquiries() as AdminEnquiryItem[],
           mentors: db.mentor_profiles,
           students: db.student_records,
           academicProfiles,
@@ -233,6 +255,9 @@ function Admin() {
       ]);
 
       const localFallback = shouldUseLocalMode(studentsRes.error) ? readLocalDb() : null;
+      const mergedEnquiries = isLocalDevHost()
+        ? [...readLocalEnquiries(), ...enquiriesResult]
+        : enquiriesResult;
 
       return {
         isAdmin: true,
@@ -242,7 +267,7 @@ function Admin() {
         names: Object.fromEntries(
           (profilesRes.data ?? []).map((p) => [p.user_id, p.display_name]),
         ) as Record<string, string>,
-        enquiries: enquiriesResult,
+        enquiries: mergedEnquiries,
         mentors: (localFallback?.mentor_profiles ?? mentorsRes.data ?? []) as MentorProfileRow[],
         students: (localFallback?.student_records ?? studentsRes.data ?? []) as StudentRecordRow[],
         academicProfiles,
@@ -263,6 +288,97 @@ function Admin() {
       };
     },
   });
+
+  const commandItems = useMemo(() => {
+    const data = q.data;
+    if (!data || !data.isAdmin) return [];
+    const list: Array<{
+      id: string;
+      group: string;
+      label: string;
+      meta: string;
+      run: () => void;
+    }> = [
+      ...(Object.keys(SECTION_META) as AdminSectionId[]).map((id) => ({
+        id: `sec-${id}`,
+        group: "Console Sections",
+        label: SECTION_META[id].title,
+        meta: "Workspace view",
+        run: () => {
+          setSection(id);
+          setSidebarOpen(false);
+          setMsg("");
+        },
+      })),
+      ...data.academicProfiles.map((p) => ({
+        id: `stu-${p.studentId}`,
+        group: "Students",
+        label: `${p.fullName} (${p.studentCode})`,
+        meta: `${p.classGrade} · ${p.overallPercentage}%`,
+        run: () => {
+          setSelectedStudentId(p.studentId);
+          setSection("academics");
+          setSidebarOpen(false);
+        },
+      })),
+      ...data.mentors.map((m) => ({
+        id: `men-${m.user_id}`,
+        group: "Mentors",
+        label: m.full_name,
+        meta: m.subjects || "Mentor",
+        run: () => {
+          setSection("database");
+          setSidebarOpen(false);
+        },
+      })),
+      ...data.lectures.map((l) => ({
+        id: `lec-${l.id}`,
+        group: "Recorded Lectures",
+        label: l.title,
+        meta: `${l.subject} · ${l.topic}`,
+        run: () => {
+          setSection("lectures");
+          setSidebarOpen(false);
+        },
+      })),
+      ...data.allocations.map((a) => ({
+        id: `fund-${a.id}`,
+        group: "Fund Ledger",
+        label: a.title,
+        meta: `${a.category} · ${formatINR(Number(a.amount_inr))}`,
+        run: () => {
+          setSection("funds");
+          setSidebarOpen(false);
+        },
+      })),
+      {
+        id: "route-home",
+        group: "Quick Navigation",
+        label: "Open Public Website",
+        meta: "/",
+        run: () => navigate({ to: "/" }),
+      },
+      {
+        id: "route-students",
+        group: "Quick Navigation",
+        label: "Public Student Directory",
+        meta: "/students",
+        run: () => navigate({ to: "/students" }),
+      },
+      {
+        id: "route-funds",
+        group: "Quick Navigation",
+        label: "Public Fund Transparency Ledger",
+        meta: "/funds",
+        run: () => navigate({ to: "/funds" }),
+      },
+    ];
+    const query = cmdQuery.trim().toLowerCase();
+    if (!query) return list.slice(0, 12);
+    return list
+      .filter((item) => `${item.label} ${item.meta} ${item.group}`.toLowerCase().includes(query))
+      .slice(0, 14);
+  }, [cmdQuery, navigate, q.data]);
 
   if (q.isLoading || !q.data) {
     return (
@@ -443,15 +559,97 @@ function Admin() {
             <p>{activeMeta.subtitle}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="cmdk-trigger"
+              onClick={() => {
+                setCmdOpen(true);
+                setCmdQuery("");
+                setCmdIndex(0);
+              }}
+            >
+              <Search size={13} /> Search &amp; Jump… <kbd>Ctrl K</kbd>
+            </button>
             <span className="pill-badge pill-green">
               <ShieldCheck size={12} />{" "}
               {d.isLocal ? "Preview Mode · RLS Simulation" : "Admin Verified · RLS Active"}
             </span>
             <Button asChild size="sm" variant="outline">
-              <Link to="/students">Full Directory View</Link>
+              <Link to="/students">Directory View</Link>
+            </Button>
+            <Button asChild size="sm" variant="ghost">
+              <Link to="/">
+                <ExternalLink size={13} /> Public Site
+              </Link>
             </Button>
           </div>
         </header>
+
+        {cmdOpen && (
+          <div
+            className="cmdk-backdrop"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Quick command palette"
+            onClick={() => setCmdOpen(false)}
+          >
+            <div className="cmdk-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="cmdk-head">
+                <Search size={16} className="text-muted-foreground" />
+                <input
+                  autoFocus
+                  className="cmdk-input"
+                  placeholder="Jump to student (e.g. Aarav, RBT-2026-001), mentor, lecture or ledger item…"
+                  value={cmdQuery}
+                  onChange={(e) => {
+                    setCmdQuery(e.target.value);
+                    setCmdIndex(0);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "ArrowDown") {
+                      e.preventDefault();
+                      setCmdIndex((i) => Math.min(commandItems.length - 1, i + 1));
+                    } else if (e.key === "ArrowUp") {
+                      e.preventDefault();
+                      setCmdIndex((i) => Math.max(0, i - 1));
+                    } else if (e.key === "Enter" && commandItems[cmdIndex]) {
+                      e.preventDefault();
+                      commandItems[cmdIndex]!.run();
+                      setCmdOpen(false);
+                    }
+                  }}
+                />
+                <Button size="sm" variant="ghost" onClick={() => setCmdOpen(false)}>
+                  Esc
+                </Button>
+              </div>
+              <div className="cmdk-list">
+                {commandItems.length === 0 ? (
+                  <div className="p-4 text-xs text-muted-foreground text-center">
+                    No matching sections, students, mentors or ledger items found.
+                  </div>
+                ) : (
+                  commandItems.map((item, idx) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={`cmdk-item ${idx === cmdIndex ? "is-selected" : ""}`}
+                      onClick={() => {
+                        item.run();
+                        setCmdOpen(false);
+                      }}
+                    >
+                      <span className="truncate font-medium">{item.label}</span>
+                      <span className="text-[11px] text-muted-foreground shrink-0">
+                        {item.group} · {item.meta}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="console-content">
           {msg && (

@@ -3,26 +3,17 @@ import { useState } from "react";
 import { ArrowUpRight, Heart, Instagram, Mail, MapPin, Menu, ShieldCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import logo from "@/assets/logo.jpeg.asset.json";
+import { LANGUAGE_OPTIONS, useLanguage } from "@/lib/i18n";
 import { site } from "@/lib/site";
 
-const nav = [
-  { to: "/", label: "Home" },
-  { to: "/about", label: "About Us" },
-  { to: "/learn", label: "Learn with Rabata" },
-  { to: "/students", label: "Student Profiles" },
-  { to: "/impact", label: "Our Impact" },
-  { to: "/funds", label: "Fund Transparency" },
-  { to: "/community", label: "Community" },
-  { to: "/contact", label: "Contact" },
-] as const;
-
 export function Brand() {
+  const { t } = useLanguage();
   return (
     <Link to="/" className="brand" aria-label="Rabata home">
       <img src={logo.url} alt="Rabata tree of education logo" width={55} height={61} />
       <div>
         <div className="brand-name">RABATA</div>
-        <div className="brand-sub">Learn. Empower. Rise.</div>
+        <div className="brand-sub">{t.brandSub}</div>
       </div>
     </Link>
   );
@@ -30,25 +21,52 @@ export function Brand() {
 
 export function Header() {
   const [open, setOpen] = useState(false);
+  const { lang, setLang, t } = useLanguage();
+
+  const nav = [
+    { to: "/", label: t.nav.home },
+    { to: "/about", label: t.nav.about },
+    { to: "/learn", label: t.nav.learn },
+    { to: "/students", label: t.nav.students },
+    { to: "/impact", label: t.nav.impact },
+    { to: "/funds", label: t.nav.funds },
+    { to: "/community", label: t.nav.community },
+    { to: "/contact", label: t.nav.contact },
+  ] as const;
+
   return (
     <>
       <div className="topbar">
         <div className="container">
           <span>
-            <Heart size={11} /> Connecting Education with Opportunity.
+            <Heart size={11} /> {t.tagline}
           </span>
           <span className="top-location">
             <MapPin size={11} /> Derabassi, Punjab, India
           </span>
-          <span style={{ display: "flex", gap: 16 }}>
+          <span style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+            <div className="lang-switcher" role="group" aria-label="Language switcher">
+              {LANGUAGE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.code}
+                  type="button"
+                  className={`lang-btn ${lang === opt.code ? "is-active" : ""}`}
+                  aria-pressed={lang === opt.code}
+                  title={opt.nativeName}
+                  onClick={() => setLang(opt.code)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
             <a href={site.instagram} target="_blank" rel="noreferrer">
               <Instagram size={12} /> Follow our journey <ArrowUpRight size={11} />
             </a>
             <Link to="/account">
-              <ShieldCheck size={12} /> Member Portal
+              <ShieldCheck size={12} /> {t.nav.memberPortal}
             </Link>
             <Link to="/admin">
-              <ShieldCheck size={12} /> Admin Console
+              <ShieldCheck size={12} /> {t.nav.adminConsole}
             </Link>
           </span>
         </div>
@@ -64,7 +82,7 @@ export function Header() {
             ))}
             <Button asChild variant="secondary" className="nav-cta">
               <Link to="/get-involved">
-                <Heart size={13} /> Get Involved
+                <Heart size={13} /> {t.nav.getInvolved}
               </Link>
             </Button>
           </nav>
@@ -82,19 +100,41 @@ export function Header() {
       </header>
       {open && (
         <nav className="mobile-nav" aria-label="Mobile navigation">
+          <div className="flex items-center justify-between border-b pb-3">
+            <span className="text-xs font-semibold text-muted-foreground">
+              Language / भाषा / ਭਾਸ਼ਾ
+            </span>
+            <div
+              className="lang-switcher is-light"
+              role="group"
+              aria-label="Mobile language switcher"
+            >
+              {LANGUAGE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.code}
+                  type="button"
+                  className={`lang-btn ${lang === opt.code ? "is-active" : ""}`}
+                  aria-pressed={lang === opt.code}
+                  onClick={() => setLang(opt.code)}
+                >
+                  {opt.nativeName}
+                </button>
+              ))}
+            </div>
+          </div>
           {nav.map((n) => (
             <Link key={n.to} to={n.to} onClick={() => setOpen(false)}>
               {n.label}
             </Link>
           ))}
           <Link to="/get-involved" onClick={() => setOpen(false)}>
-            Get Involved
+            {t.nav.getInvolved}
           </Link>
           <Link to="/skills" onClick={() => setOpen(false)}>
-            Skills &amp; Careers
+            {t.nav.skills}
           </Link>
           <Link to="/account" onClick={() => setOpen(false)}>
-            Portal &amp; Account
+            {t.nav.memberPortal}
           </Link>
         </nav>
       )}

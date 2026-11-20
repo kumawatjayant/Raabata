@@ -349,3 +349,222 @@ export async function uploadPlatformFile(
 
   throw new Error("File upload failed. Please paste a valid URL or try again.");
 }
+
+export interface LectureQuizQuestion {
+  id: string;
+  question: string;
+  options: string[];
+  correctIndex: number;
+  explanation: string;
+}
+
+export const LECTURE_QUIZZES: Record<string, LectureQuizQuestion[]> = {
+  "lec-1": [
+    {
+      id: "lec1-q1",
+      question: "Which sentence is the clearest polite self-introduction when meeting someone new?",
+      options: [
+        "Myself Aarav, staying Derabassi.",
+        "Hello, my name is Aarav and I am in Class 7 at Derabassi.",
+        "Name is Aarav only.",
+        "I am coming from school now.",
+      ],
+      correctIndex: 1,
+      explanation:
+        "Use 'My name is...' rather than 'Myself...' and speak calmly in complete sentences.",
+    },
+    {
+      id: "lec1-q2",
+      question: "When you don't understand a word in English class, what is the best response?",
+      options: [
+        "Stay silent so nobody notices.",
+        "Say 'Excuse me, could you please explain that word again?'",
+        "Wait until next week to ask.",
+        "Skip the whole chapter.",
+      ],
+      correctIndex: 1,
+      explanation:
+        "Asking polite follow-up questions builds speaking confidence and helps other learners too.",
+    },
+    {
+      id: "lec1-q3",
+      question: "What daily 10-minute habit helps most with spoken English fluency?",
+      options: [
+        "Memorizing dictionary pages without speaking",
+        "Reading a short paragraph aloud and forming 3 sentences daily",
+        "Waiting until grammar is 100% perfect before speaking",
+        "Watching without repeating words",
+      ],
+      correctIndex: 1,
+      explanation:
+        "Speaking aloud for 10 minutes each day trains pronunciation and natural sentence rhythm.",
+    },
+  ],
+  "lec-2": [
+    {
+      id: "lec2-q1",
+      question: "In the fraction 3/4, what does the denominator (4) represent?",
+      options: [
+        "How many total equal parts the whole is divided into",
+        "The number of leftover parts",
+        "The larger number subtracted from 10",
+        "How many pages are in a notebook",
+      ],
+      correctIndex: 0,
+      explanation:
+        "The bottom number (denominator) tells you how many equal parts make up one whole.",
+    },
+    {
+      id: "lec2-q2",
+      question: "Which two fractions show the exact same amount (equivalent fractions)?",
+      options: ["1/3 and 2/5", "1/2 and 3/6", "2/3 and 3/4", "1/4 and 1/5"],
+      correctIndex: 1,
+      explanation:
+        "Multiplying both numerator and denominator of 1/2 by 3 gives 3/6, which equals half.",
+    },
+    {
+      id: "lec2-q3",
+      question:
+        "If 8 notebooks are shared equally among 4 students, what fraction does 1 student get?",
+      options: ["1/8", "1/4 of the total set (2 notebooks)", "3/4", "4/1"],
+      correctIndex: 1,
+      explanation: "One student out of 4 receives 1/4 of the set, which equals 2 notebooks.",
+    },
+  ],
+  "lec-3": [
+    {
+      id: "lec3-q1",
+      question:
+        "During the first 30 seconds of a formal interview, what creates the best impression?",
+      options: [
+        "Looking at the floor and speaking fast",
+        "Warm smile, polite greeting, steady eye contact, and clear posture",
+        "Using memorised complex words without pausing",
+        "Checking your phone messages",
+      ],
+      correctIndex: 1,
+      explanation:
+        "Calm body language and a genuine, clear greeting immediately help you connect with the interviewer.",
+    },
+    {
+      id: "lec3-q2",
+      question: "How should you answer 'Why do you want this role?' if it is your first job?",
+      options: [
+        "I don't know, anyone can do it.",
+        "Share your willingness to learn, teamwork skills, and reliability.",
+        "Say I just want money right away.",
+        "Stay quiet until they move on.",
+      ],
+      correctIndex: 1,
+      explanation:
+        "Interviewers value honesty, eagerness to learn, punctuality, and respect for customers and teammates.",
+    },
+    {
+      id: "lec3-q3",
+      question: "If you miss one part of an interviewer's question, what should you do?",
+      options: [
+        "Guess randomly without asking.",
+        "Politely ask, 'Could you please repeat the last part of the question?'",
+        "End the interview.",
+        "Change the topic completely.",
+      ],
+      correctIndex: 1,
+      explanation:
+        "Asking politely to clarify shows active listening and honesty rather than nervousness.",
+    },
+  ],
+};
+
+const SUBJECT_QUIZ_FALLBACKS: Record<string, LectureQuizQuestion[]> = {
+  English: LECTURE_QUIZZES["lec-1"]!,
+  Mathematics: LECTURE_QUIZZES["lec-2"]!,
+  "Career readiness": LECTURE_QUIZZES["lec-3"]!,
+  Science: [
+    {
+      id: "sci-q1",
+      question: "What is the best way to understand a Science diagram for school exams?",
+      options: [
+        "Trace the labels and explain what each part does in one short sentence",
+        "Skip diagrams and read only the chapter title",
+        "Color it without reading labels",
+        "Copy it once and never revise",
+      ],
+      correctIndex: 0,
+      explanation: "Linking each label to its function builds both memory and conceptual clarity.",
+    },
+    {
+      id: "sci-q2",
+      question: "Why should observations in an experiment be written immediately?",
+      options: [
+        "So we remember exact measurements cleanly without guessing later",
+        "Because pens run out quickly",
+        "To fill extra pages",
+        "To hide mistakes",
+      ],
+      correctIndex: 0,
+      explanation: "Recording what you actually observe is the foundation of scientific thinking.",
+    },
+    {
+      id: "sci-q3",
+      question: "When solving Science numericals, which habit prevents easy mistakes?",
+      options: [
+        "Writing the formula and correct units first (e.g., m/s, kg, °C)",
+        "Dropping units at every step",
+        "Guessing the final number before reading the values",
+        "Skipping intermediate steps",
+      ],
+      correctIndex: 0,
+      explanation:
+        "Keeping formulas and units visible checks whether your answer makes physical sense.",
+    },
+  ],
+  "Digital literacy": [
+    {
+      id: "dig-q1",
+      question: "Which password habit keeps a student email or learning account safest?",
+      options: [
+        "Using your own first name everywhere",
+        "A unique combination of words/numbers never shared with strangers",
+        "123456 so it is easy to type",
+        "Posting your password in a public group",
+      ],
+      correctIndex: 1,
+      explanation:
+        "Never share account passwords or OTP codes with anyone online or over unknown calls.",
+    },
+    {
+      id: "dig-q2",
+      question: "Before believing or forwarding a message online, what should you check?",
+      options: [
+        "Whether it came from an official educational source or verified teacher",
+        "How many colorful emojis it has",
+        "Only whether someone said 'urgent'",
+        "Forward it immediately without reading",
+      ],
+      correctIndex: 0,
+      explanation: "Checking trusted sources protects students and families from misinformation.",
+    },
+    {
+      id: "dig-q3",
+      question: "What makes a formal email subject line clear and helpful?",
+      options: [
+        "Leave the subject line completely blank",
+        "Write a short phrase like 'Class 7 English Homework Doubt - Aarav'",
+        "Type only 'Hello' in all caps",
+        "Write the entire paragraph inside the subject box",
+      ],
+      correctIndex: 1,
+      explanation: "A concise subject line with topic and name helps your mentor reply faster.",
+    },
+  ],
+};
+
+export function getQuizForLecture(
+  lecture: Pick<RecordedLectureRow, "id" | "subject">,
+): LectureQuizQuestion[] {
+  return (
+    LECTURE_QUIZZES[lecture.id] ??
+    SUBJECT_QUIZ_FALLBACKS[lecture.subject] ??
+    LECTURE_QUIZZES["lec-1"]!
+  );
+}

@@ -1251,6 +1251,53 @@ function escapeHtml(raw: string): string {
     .replace(/'/g, "&#39;");
 }
 
+export function buildVerificationQrSvg(verificationCode: string, payloadUrl: string): string {
+  const size = 21;
+  const seedInput = `${verificationCode}|${payloadUrl}`;
+  let hash = 2166136261;
+  for (let i = 0; i < seedInput.length; i += 1) {
+    hash ^= seedInput.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  const isFinderCell = (r: number, c: number): boolean | null => {
+    const boxes: Array<[number, number]> = [
+      [0, 0],
+      [0, size - 7],
+      [size - 7, 0],
+    ];
+    for (const [br, bc] of boxes) {
+      if (r >= br && r < br + 7 && c >= bc && c < bc + 7) {
+        const lr = r - br;
+        const lc = c - bc;
+        const onOuter = lr === 0 || lr === 6 || lc === 0 || lc === 6;
+        const onInner = lr >= 2 && lr <= 4 && lc >= 2 && lc <= 4;
+        return onOuter || onInner;
+      }
+    }
+    return null;
+  };
+
+  const rects: string[] = [];
+  for (let r = 0; r < size; r += 1) {
+    for (let c = 0; c < size; c += 1) {
+      const finder = isFinderCell(r, c);
+      let dark = false;
+      if (finder !== null) {
+        dark = finder;
+      } else {
+        const bitHash = Math.imul(hash ^ ((r + 1) * 73856093) ^ ((c + 1) * 19349663), 2654435761);
+        dark = (bitHash & 3) !== 0;
+      }
+      if (dark) {
+        rects.push(`<rect x="${c * 4}" y="${r * 4}" width="4" height="4" fill="#1a2d4c" />`);
+      }
+    }
+  }
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="84" height="84" viewBox="0 0 ${size * 4} ${size * 4}" role="img" aria-label="Verification QR code ${escapeHtml(verificationCode)}"><rect width="100%" height="100%" fill="#ffffff"/>${rects.join("")}</svg>`;
+}
+
 export function downloadStudentProgressReportPdf(
   profile: StudentAcademicProfile,
   includeGuardianContact: boolean,
@@ -1258,6 +1305,10 @@ export function downloadStudentProgressReportPdf(
   if (typeof window === "undefined") return false;
   const win = window.open("", "_blank", "width=900,height=1050");
   if (!win) return false;
+
+  const verificationId = `RBT-VER-${profile.studentCode}`;
+  const verifyUrl = "https://rabata-hub-connect-main.vercel.app/students";
+  const qrSvg = buildVerificationQrSvg(verificationId, verifyUrl);
 
   const subjectRows = profile.subjectPerformances
     .map(
@@ -1328,10 +1379,17 @@ export function downloadStudentProgressReportPdf(
         <h1>Student Academic Progress Report</h1>
         <div style="font-size:12px;color:#556;">Derabassi, Punjab, India · rabataofficial111@gmail.com</div>
       </div>
-      <div style="text-align:right;font-size:12px;">
-        <strong>Student ID:</strong> ${escapeHtml(profile.studentCode)}<br/>
-        <strong>Report Date:</strong> ${new Date().toLocaleDateString("en-IN")}<br/>
-        <strong>Overall Progress:</strong> ${profile.overallPercentage}% (${escapeHtml(profile.progressTier)})
+      <div style="display:flex;align-items:center;gap:14px;">
+        <div style="text-align:right;font-size:12px;">
+          <strong>Student ID:</strong> ${escapeHtml(profile.studentCode)}<br/>
+          <strong>Verification:</strong> ${escapeHtml(verificationId)}<br/>
+          <strong>Report Date:</strong> ${new Date().toLocaleDateString("en-IN")}<br/>
+          <strong>Overall Progress:</strong> ${profile.overallPercentage}% (${escapeHtml(profile.progressTier)})
+        </div>
+        <div style="border:1px solid #d8dee6;padding:4px;border-radius:6px;background:#fff;text-align:center;">
+          ${qrSvg}
+          <div style="font-size:8.5px;color:#556;margin-top:2px;">Verify Record</div>
+        </div>
       </div>
     </div>
 

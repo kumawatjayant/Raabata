@@ -1,11 +1,19 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useState, type FormEvent } from "react";
-import { Check, Link2, Mail, Trash2, UserPlus, X } from "lucide-react";
+import { Check, Link2, Mail, PhoneCall, Sparkles, Trash2, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { friendlyError, type RoleRow } from "@/lib/access";
-import type { AdminEnquiryItem } from "@/lib/enquiries.functions";
-import { makeLocalId, shouldUseLocalMode, updateLocalDb } from "@/lib/local-store";
+import { enquirySchema } from "@/lib/enquiry-schema";
+import { submitEnquiry, type AdminEnquiryItem } from "@/lib/enquiries.functions";
+import {
+  appendLocalEnquiry,
+  isLocalDevHost,
+  makeLocalId,
+  shouldUseLocalMode,
+  updateLocalDb,
+} from "@/lib/local-store";
 import {
   CLASS_LEVELS,
   type AssignmentRow,
@@ -13,6 +21,45 @@ import {
   type ProgressLogRow,
   type StudentRecordRow,
 } from "@/lib/platform";
+
+const VOICE_SCENARIOS = [
+  {
+    id: "hindi-derabassi",
+    label: "Hindi Call · Derabassi",
+    studentName: "Ananya Kumari",
+    guardianEmail: "parent.ananya@example.com",
+    classLevel: "4–5",
+    subjects: "Spoken English, Mathematics",
+    language: "Hindi",
+    format: "In person",
+    transcript:
+      "Voice Agent Transcript (Hindi): Parent from Derabassi called the Rabata helpline requesting Class 5 English reading fluency and foundational Mathematics coaching.",
+  },
+  {
+    id: "punjabi-mubarakpur",
+    label: "Punjabi Call · Mubarakpur",
+    studentName: "Harpreet Singh",
+    guardianEmail: "family.harpreet@example.com",
+    classLevel: "6–8",
+    subjects: "Science, Computer Literacy",
+    language: "Punjabi",
+    format: "In person",
+    transcript:
+      "Voice Agent Transcript (Punjabi): Grandfather called to enroll Harpreet for after-school Science revision and basic computer typing.",
+  },
+  {
+    id: "youth-interview",
+    label: "Youth Call · Interview Prep",
+    studentName: "Simran Kaur",
+    guardianEmail: "simran.career@example.com",
+    classLevel: "Young adult",
+    subjects: "Spoken English, Career readiness",
+    language: "Hindi and English",
+    format: "Online",
+    transcript:
+      "Voice Agent Transcript (Bilingual): Young adult applicant preparing for retail store customer service interviews.",
+  },
+] as const;
 
 export function AdminAccessAndEnquiriesPanel({
   roles,
@@ -26,7 +73,87 @@ export function AdminAccessAndEnquiriesPanel({
   onStatus: (msg: string, isErr?: boolean) => void;
 }) {
   const qc = useQueryClient();
+  const submitEnquiryFn = useServerFn(submitEnquiry);
   const [kindFilter, setKindFilter] = useState<"all" | "student" | "volunteer" | "contact">("all");
+  const [voiceName, setVoiceName] = useState<string>(VOICE_SCENARIOS[0].studentName);
+  const [voiceEmail, setVoiceEmail] = useState<string>(VOICE_SCENARIOS[0].guardianEmail);
+  const [voiceClass, setVoiceClass] = useState<string>(VOICE_SCENARIOS[0].classLevel);
+  const [voiceSubjects, setVoiceSubjects] = useState<string>(VOICE_SCENARIOS[0].subjects);
+  const [voiceLang, setVoiceLang] = useState<string>(VOICE_SCENARIOS[0].language);
+  const [voiceFormat, setVoiceFormat] = useState<string>(VOICE_SCENARIOS[0].format);
+  const [voiceTranscript, setVoiceTranscript] = useState<string>(VOICE_SCENARIOS[0].transcript);
+  const [voiceBusy, setVoiceBusy] = useState(false);
+
+  function loadVoicePreset(presetId: string) {
+    const found = VOICE_SCENARIOS.find((s) => s.id === presetId);
+    if (!found) return;
+    setVoiceName(found.studentName);
+    setVoiceEmail(found.guardianEmail);
+    setVoiceClass(found.classLevel);
+    setVoiceSubjects(found.subjects);
+    setVoiceLang(found.language);
+    setVoiceFormat(found.format);
+    setVoiceTranscript(found.transcript);
+  }
+
+  async function simulateVoiceIntake(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const parsed = enquirySchema.safeParse({
+      kind: "student",
+      name: voiceName,
+      email: voiceEmail,
+      classLevel: voiceClass,
+      subjects: voiceSubjects,
+      language: voiceLang,
+      format: voiceFormat,
+      message: voiceTranscript,
+      consent: true,
+      website: "",
+    });
+    if (!parsed.success) {
+      onStatus(parsed.error.issues[0]?.message || "Invalid voice agent payload.", true);
+      return;
+    }
+
+    setVoiceBusy(true);
+    try {
+      const localEntry: AdminEnquiryItem = {
+        id: makeLocalId("voice"),
+        created_at: new Date().toISOString(),
+        kind: "student",
+        name: parsed.data.name,
+        email: parsed.data.email,
+        consent: true,
+        details: {
+          channel: "Inbound Voice Agent",
+          classLevel: parsed.data.classLevel ?? "",
+          subjects: parsed.data.subjects ?? "",
+          language: parsed.data.language ?? "",
+          format: parsed.data.format ?? "",
+          message: parsed.data.message,
+        },
+      };
+
+      if (isLocalDevHost()) {
+        appendLocalEnquiry(localEntry);
+      }
+
+      if (!shouldUseLocalMode()) {
+        const res = await submitEnquiryFn({ data: parsed.data });
+        if (!res.success && !isLocalDevHost()) {
+          onStatus(res.message || "Voice agent intake could not be saved.", true);
+          return;
+        }
+      }
+
+      onStatus(
+        `Inbound Voice Agent call for ${parsed.data.name} logged via enquirySchema. Review below and click “Add to Student Database” to enroll.`,
+      );
+      qc.invalidateQueries({ queryKey: ["admin-dashboard"] });
+    } finally {
+      setVoiceBusy(false);
+    }
+  }
 
   async function review(id: string, decision: "active" | "rejected") {
     if (shouldUseLocalMode()) {
@@ -171,6 +298,105 @@ export function AdminAccessAndEnquiriesPanel({
         )}
       </div>
 
+      <form className="form-panel" onSubmit={simulateVoiceIntake}>
+        <div className="eyebrow">
+          <PhoneCall size={13} /> Inbound Calling Voice Agent · Live Helpline Simulator
+        </div>
+        <h2>Automated Voice Call Student Intake</h2>
+        <p className="section-copy">
+          Parents who cannot read or type English can call Rabata’s multilingual voice helpline in
+          Hindi or Punjabi. The voice agent captures structured admission details validated through{" "}
+          <code>enquirySchema</code> and pushes them straight into the Admin Enquiries Inbox.
+        </p>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {VOICE_SCENARIOS.map((preset) => (
+            <Button
+              key={preset.id}
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => loadVoicePreset(preset.id)}
+            >
+              <Sparkles size={13} /> {preset.label}
+            </Button>
+          ))}
+        </div>
+
+        <div className="form-grid mt-5">
+          <label className="field">
+            Caller / Student First Name *
+            <input
+              required
+              maxLength={100}
+              value={voiceName}
+              onChange={(e) => setVoiceName(e.target.value)}
+            />
+          </label>
+          <label className="field">
+            Parent / Contact Email *
+            <input
+              type="email"
+              required
+              maxLength={255}
+              value={voiceEmail}
+              onChange={(e) => setVoiceEmail(e.target.value)}
+            />
+          </label>
+          <label className="field">
+            Class Level *
+            <select value={voiceClass} onChange={(e) => setVoiceClass(e.target.value)}>
+              {CLASS_LEVELS.filter((c) => c !== "All").map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            Subjects Needed *
+            <input
+              required
+              maxLength={200}
+              value={voiceSubjects}
+              onChange={(e) => setVoiceSubjects(e.target.value)}
+            />
+          </label>
+          <label className="field">
+            Spoken Language Detected
+            <select value={voiceLang} onChange={(e) => setVoiceLang(e.target.value)}>
+              <option value="Hindi">Hindi</option>
+              <option value="Punjabi">Punjabi</option>
+              <option value="English">English</option>
+              <option value="Hindi and English">Hindi and English</option>
+            </select>
+          </label>
+          <label className="field">
+            Preferred Format
+            <select value={voiceFormat} onChange={(e) => setVoiceFormat(e.target.value)}>
+              <option value="In person">In person</option>
+              <option value="Online">Online</option>
+              <option value="Either">Either</option>
+            </select>
+          </label>
+          <label className="field wide">
+            Extracted Voice Call Summary / Transcript *
+            <textarea
+              required
+              minLength={5}
+              maxLength={2000}
+              value={voiceTranscript}
+              onChange={(e) => setVoiceTranscript(e.target.value)}
+            />
+          </label>
+        </div>
+
+        <Button type="submit" disabled={voiceBusy} className="mt-4">
+          <PhoneCall size={14} />{" "}
+          {voiceBusy ? "Logging Voice Call Intake…" : "Simulate Inbound Voice Agent Call"}
+        </Button>
+      </form>
+
       <div>
         <div className="section-head">
           <div>
@@ -207,6 +433,11 @@ export function AdminAccessAndEnquiriesPanel({
                 <div className="ledger-main">
                   <div className="ledger-badges">
                     <span className="pill-badge pill-green capitalize">{item.kind}</span>
+                    {item.details["channel"] && (
+                      <span className="pill-badge pill-gold">
+                        <PhoneCall size={11} /> {item.details["channel"]}
+                      </span>
+                    )}
                     <span className="text-xs text-muted-foreground">
                       {new Date(item.created_at).toLocaleDateString("en-IN")}
                     </span>

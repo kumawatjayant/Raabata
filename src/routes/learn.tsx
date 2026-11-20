@@ -1,7 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { ArrowRight, ArrowUpRight, BookOpen, Download, Play, Search, Video } from "lucide-react";
+import {
+  ArrowRight,
+  ArrowUpRight,
+  BookOpen,
+  CheckCircle2,
+  Download,
+  HelpCircle,
+  Play,
+  RotateCcw,
+  Search,
+  Video,
+  XCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeading } from "@/components/site-shell";
 import { pageHead } from "@/lib/site";
@@ -9,6 +21,7 @@ import { resources, type LearningResource } from "@/lib/resources";
 import {
   CLASS_LEVELS,
   fetchPublishedLectures,
+  getQuizForLecture,
   LECTURE_SUBJECTS,
   type RecordedLectureRow,
 } from "@/lib/platform";
@@ -34,6 +47,24 @@ function Learn() {
   const [lectureTopic, setLectureTopic] = useState("All topics");
   const [lectureSearch, setLectureSearch] = useState("");
   const [activeLecture, setActiveLecture] = useState<RecordedLectureRow | null>(null);
+  const [quizLecture, setQuizLecture] = useState<RecordedLectureRow | null>(null);
+  const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({});
+
+  function openQuiz(lecture: RecordedLectureRow) {
+    setQuizLecture(lecture);
+    setQuizAnswers({});
+  }
+
+  const activeQuizQuestions = useMemo(
+    () => (quizLecture ? getQuizForLecture(quizLecture) : []),
+    [quizLecture],
+  );
+  const quizAnsweredCount = activeQuizQuestions.filter(
+    (q) => typeof quizAnswers[q.id] === "number",
+  ).length;
+  const quizCorrectCount = activeQuizQuestions.filter(
+    (q) => quizAnswers[q.id] === q.correctIndex,
+  ).length;
 
   const lecturesQuery = useQuery({
     queryKey: ["recorded-lectures"],
@@ -158,9 +189,14 @@ function Learn() {
                     {activeLecture.duration ? ` · ${activeLecture.duration}` : ""}
                   </p>
                 </div>
-                <Button variant="ghost" onClick={() => setActiveLecture(null)}>
-                  Close player
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" onClick={() => openQuiz(activeLecture)}>
+                    <HelpCircle size={15} /> Practice Quiz (3 Qs)
+                  </Button>
+                  <Button variant="ghost" onClick={() => setActiveLecture(null)}>
+                    Close player
+                  </Button>
+                </div>
               </div>
               {activeLecture.youtube_id ? (
                 <iframe
@@ -183,6 +219,89 @@ function Learn() {
               {activeLecture.description && (
                 <p className="mt-4 text-sm text-muted-foreground">{activeLecture.description}</p>
               )}
+            </div>
+          )}
+
+          {quizLecture && (
+            <div className="quiz-panel mb-8" role="region" aria-label="Interactive practice quiz">
+              <div className="section-head mb-4">
+                <div>
+                  <div className="eyebrow">
+                    <HelpCircle size={13} /> Self-check practice quiz
+                  </div>
+                  <h3>{quizLecture.title}</h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Select an option for each question to receive instant feedback and explanation.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="pill-badge pill-green">
+                    Score: {quizCorrectCount}/{activeQuizQuestions.length}
+                    {quizAnsweredCount === activeQuizQuestions.length &&
+                      quizCorrectCount === activeQuizQuestions.length &&
+                      " · Mastered!"}
+                  </span>
+                  <Button variant="outline" size="sm" onClick={() => setQuizAnswers({})}>
+                    <RotateCcw size={13} /> Reset
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setQuizLecture(null)}>
+                    Close quiz
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid gap-4">
+                {activeQuizQuestions.map((qq, idx) => {
+                  const chosen = quizAnswers[qq.id];
+                  const isAnswered = typeof chosen === "number";
+                  const isCorrect = isAnswered && chosen === qq.correctIndex;
+                  return (
+                    <div key={qq.id} className="quiz-question">
+                      <div className="font-semibold text-sm text-foreground mb-3">
+                        Q{idx + 1}. {qq.question}
+                      </div>
+                      <div className="grid gap-2">
+                        {qq.options.map((opt, optIdx) => {
+                          const isSelected = chosen === optIdx;
+                          const optionClass = isAnswered
+                            ? optIdx === qq.correctIndex
+                              ? "is-correct"
+                              : isSelected
+                                ? "is-wrong"
+                                : ""
+                            : "";
+                          return (
+                            <button
+                              key={opt}
+                              type="button"
+                              className={`quiz-option ${optionClass}`}
+                              onClick={() =>
+                                setQuizAnswers((prev) => ({ ...prev, [qq.id]: optIdx }))
+                              }
+                            >
+                              <span>{opt}</span>
+                              {isAnswered && optIdx === qq.correctIndex && (
+                                <CheckCircle2 size={15} />
+                              )}
+                              {isAnswered && isSelected && optIdx !== qq.correctIndex && (
+                                <XCircle size={15} />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {isAnswered && (
+                        <div className="mt-3 text-xs text-muted-foreground">
+                          <strong className={isCorrect ? "text-foreground" : "text-destructive"}>
+                            {isCorrect ? "Well done! " : "Review tip: "}
+                          </strong>
+                          {qq.explanation}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -229,9 +348,14 @@ function Learn() {
                     </div>
                     <h3>{lecture.title}</h3>
                     <p>{lecture.description || "Recorded lesson from Rabata."}</p>
-                    <Button variant="default" onClick={() => setActiveLecture(lecture)}>
-                      <Play /> Watch lecture
-                    </Button>
+                    <div className="mt-auto flex flex-wrap gap-2">
+                      <Button variant="default" onClick={() => setActiveLecture(lecture)}>
+                        <Play /> Watch lecture
+                      </Button>
+                      <Button variant="outline" onClick={() => openQuiz(lecture)}>
+                        <HelpCircle size={15} /> Practice Quiz
+                      </Button>
+                    </div>
                   </div>
                 </article>
               ))}

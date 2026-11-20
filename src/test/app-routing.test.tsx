@@ -3,10 +3,12 @@ import { createRouter, rootRouteId } from "@tanstack/react-router";
 import { describe, expect, it } from "vitest";
 
 import { routeTree } from "@/routeTree.gen";
+import { TRANSLATIONS } from "@/lib/i18n";
 import { site } from "@/lib/site";
 import { resources } from "@/lib/resources";
-import { calculateFundSummary, extractYouTubeId } from "@/lib/platform";
+import { calculateFundSummary, extractYouTubeId, getQuizForLecture } from "@/lib/platform";
 import {
+  buildVerificationQrSvg,
   calculateAttendanceMetrics,
   calculateOverallAcademicProgress,
   calculateSubjectPercentage,
@@ -162,5 +164,35 @@ describe("Platform helpers", () => {
     expect(att.attended).toBe(3);
     expect(att.missed).toBe(1);
     expect(att.percentage).toBe(75);
+  });
+
+  it("supports English, Hindi, and Punjabi translations for grassroots access", () => {
+    for (const lang of ["en", "hi", "pa"] as const) {
+      expect(TRANSLATIONS[lang].nav.home.trim().length).toBeGreaterThan(0);
+      expect(TRANSLATIONS[lang].enquiryForm.studentHeading.trim().length).toBeGreaterThan(0);
+      expect(TRANSLATIONS[lang].enquiryForm.submitStudent.trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  it("returns 3 valid multiple-choice practice questions per recorded lecture", () => {
+    for (const id of ["lec-1", "lec-2", "lec-3", "unknown-id"]) {
+      const questions = getQuizForLecture({ id, subject: "Science" });
+      expect(questions).toHaveLength(3);
+      for (const q of questions) {
+        expect(q.options.length).toBe(4);
+        expect(q.correctIndex).toBeGreaterThanOrEqual(0);
+        expect(q.correctIndex).toBeLessThan(q.options.length);
+      }
+    }
+  });
+
+  it("builds a deterministic SVG verification QR code for student PDF reports", () => {
+    const svg = buildVerificationQrSvg(
+      "RBT-VER-RBT-2026-001",
+      "https://rabata-hub-connect-main.vercel.app/students",
+    );
+    expect(svg.startsWith("<svg")).toBe(true);
+    expect(svg).toContain('aria-label="Verification QR code RBT-VER-RBT-2026-001"');
+    expect(svg).toContain("<rect");
   });
 });

@@ -55,6 +55,17 @@ export const LOCAL_DEV_ACCOUNTS: Record<LocalDevRoleKey, LocalDevSession> = {
 
 const SESSION_KEY = "rabata_local_dev_session_v1";
 const DB_KEY = "rabata_local_db_v3";
+const ENQUIRIES_KEY = "rabata_local_enquiries_v1";
+
+export interface LocalEnquiryItem {
+  id: string;
+  created_at: string;
+  kind: "contact" | "student" | "volunteer";
+  name: string;
+  email: string;
+  details: Record<string, string>;
+  consent: boolean;
+}
 
 export interface LocalDatabaseState {
   app_profiles: Array<{
@@ -594,4 +605,24 @@ export function shouldUseLocalMode(error?: { code?: string; message?: string } |
   if (getLocalDevSession()) return true;
   if (!error) return true;
   return isSchemaMissingError(error);
+}
+
+export function readLocalEnquiries(): LocalEnquiryItem[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(ENQUIRIES_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as LocalEnquiryItem[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function appendLocalEnquiry(item: LocalEnquiryItem): LocalEnquiryItem[] {
+  const next = [item, ...readLocalEnquiries()].slice(0, 50);
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(ENQUIRIES_KEY, JSON.stringify(next));
+  }
+  return next;
 }

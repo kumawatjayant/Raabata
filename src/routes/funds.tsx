@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   ArrowRight,
+  Download,
   ExternalLink,
   FileCheck2,
   HeartHandshake,
@@ -17,8 +18,76 @@ import {
   fetchPublicFundData,
   formatINR,
   FUND_CATEGORIES,
+  type AcknowledgedDonation,
   type FundAllocationRow,
 } from "@/lib/platform";
+
+function escapeCsvCell(value: string | number | null | undefined): string {
+  const str = String(value ?? "");
+  const safe = /^[=+\-@\t\r]/.test(str) ? `'${str}` : str;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
+
+function downloadFundsAuditCsv(
+  allocations: FundAllocationRow[],
+  acknowledgedDonations: AcknowledgedDonation[],
+): void {
+  if (typeof window === "undefined") return;
+  const headers = [
+    "Record ID",
+    "Date",
+    "Entry Kind",
+    "Category / Purpose",
+    "Title",
+    "Vendor / Public Donor Label",
+    "Amount (INR)",
+    "Proof Type",
+    "Proof URL",
+    "Description",
+  ];
+
+  const rows: string[][] = [
+    ...allocations.map((a) => [
+      a.id,
+      a.entry_date,
+      a.entry_type === "expenditure" ? "Expenditure (Spent)" : "Planned Allocation",
+      a.category,
+      a.title,
+      a.vendor_or_beneficiary ?? "",
+      String(a.amount_inr),
+      a.proof_type ?? "",
+      a.proof_url ?? "",
+      a.description ?? "",
+    ]),
+    ...acknowledgedDonations.map((d) => [
+      d.id,
+      d.received_date,
+      "Publicly Acknowledged Contribution",
+      d.purpose,
+      d.public_label,
+      d.public_label,
+      String(d.amount_inr),
+      "",
+      "",
+      d.purpose,
+    ]),
+  ];
+
+  const csvContent = [
+    headers.map(escapeCsvCell).join(","),
+    ...rows.map((r) => r.map(escapeCsvCell).join(",")),
+  ].join("\r\n");
+
+  const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", "rabata-fund-transparency-ledger.csv");
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
 
 export const Route = createFileRoute("/funds")({
   head: () =>
@@ -177,6 +246,14 @@ function FundsPage() {
                 supporting documents, bills, and photographs.
               </p>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={allocations.length === 0 && summary.acknowledgedDonations.length === 0}
+              onClick={() => downloadFundsAuditCsv(allocations, summary.acknowledgedDonations)}
+            >
+              <Download size={14} /> Download Open Audit CSV
+            </Button>
           </div>
 
           <div className="filters" style={{ gridTemplateColumns: "2fr 1fr" }}>

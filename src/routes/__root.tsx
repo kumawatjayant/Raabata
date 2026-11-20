@@ -4,6 +4,7 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
   type ErrorComponentProps,
@@ -80,7 +81,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Rabata | Connecting Education with Opportunity" },
-      { name: "description", content: "Free education, skills and community support in Derabassi, Punjab." },
+      {
+        name: "description",
+        content: "Free education, skills and community support in Derabassi, Punjab.",
+      },
       { name: "author", content: "Rabata" },
       { property: "og:title", content: "Rabata | Connecting Education with Opportunity" },
       { property: "og:description", content: "Education, skills and opportunity for every child." },
@@ -95,7 +99,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "icon", href: "/favicon.png", type: "image/png" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap",
+      },
     ],
   }),
   shellComponent: RootShell,
@@ -120,12 +127,16 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isConsoleRoute = pathname.startsWith("/admin") || pathname.startsWith("/account");
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Header />
-      <main id="main-content"><Outlet /></main>
-      <Footer />
+      {!isConsoleRoute && <Header />}
+      <main id="main-content">
+        <Outlet />
+      </main>
+      {!isConsoleRoute && <Footer />}
     </QueryClientProvider>
   );
 }
