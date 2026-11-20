@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1792064904132,
+      "tag": "0000_create_private_enquiries",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792064980497,
+      "tag": "0001_rate_limited_enquiry_intake",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795097447294,
+      "tag": "0002_rabata_account_roles",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795180000000,
+      "tag": "0003_rabata_platform_complete",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795250000000,
+      "tag": "0004_student_academic_profiles",
+      "breakpoints": true
+    }
+  ]
+}
