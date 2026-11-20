@@ -54,7 +54,7 @@ export const LOCAL_DEV_ACCOUNTS: Record<LocalDevRoleKey, LocalDevSession> = {
 };
 
 const SESSION_KEY = "rabata_local_dev_session_v1";
-const DB_KEY = "rabata_local_db_v2";
+const DB_KEY = "rabata_local_db_v3";
 
 export interface LocalDatabaseState {
   app_profiles: Array<{
@@ -396,7 +396,7 @@ function defaultDatabaseState(): LocalDatabaseState {
           "Purchased English workbooks, ruled notebooks, pens, and geometry kits for active Rabata learners.",
         amount_inr: 4800,
         vendor_or_beneficiary: "Derabassi Book Depot",
-        proof_url: "/__l5e/assets-v1/5454dbb8-7bb3-4b59-9f6b-6de139ec6595/rabata-classroom.jpeg",
+        proof_url: "/images/rabata-classroom.jpeg",
         proof_type: "photograph",
         proof_caption: "Students using distributed learning notebooks during class session",
         is_published: true,
@@ -414,7 +414,7 @@ function defaultDatabaseState(): LocalDatabaseState {
           "Ingredients and meal packaging for home-cooked meals served to children after weekend sessions.",
         amount_inr: 3700,
         vendor_or_beneficiary: "Local Grocery & Community Kitchen",
-        proof_url: "/__l5e/assets-v1/1f88f403-6390-4470-8fbf-7062cf4ed33c/food-drive.jpeg",
+        proof_url: "/images/food-drive.jpeg",
         proof_type: "photograph",
         proof_caption: "Rabata food donation drive update",
         is_published: true,

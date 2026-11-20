@@ -228,7 +228,7 @@ function defaultTeacherFeedback(): TeacherFeedbackRecord {
   };
 }
 
-const ACADEMIC_STORAGE_KEY = "rabata_academic_profiles_v1";
+const ACADEMIC_STORAGE_KEY = "rabata_academic_profiles_v2";
 
 type StoredAcademicRow = {
   student_id: string;
@@ -447,7 +447,7 @@ function seededShowcaseRows(): Record<string, StoredAcademicRow> {
           title: "Rabata Spoken English Milestone Certificate",
           docType: "Certificate",
           issueDate: "2026-11-10",
-          fileUrl: "/__l5e/assets-v1/eb80a235-6c19-4b1f-ad04-8c345489857e/education.jpeg",
+          fileUrl: "/images/education.jpeg",
           notes: "Awarded for consistent attendance and active English circle participation.",
         },
       ],
