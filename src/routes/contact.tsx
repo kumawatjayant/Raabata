@@ -1,7 +1,80 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { Mail, Instagram, MapPin } from 'lucide-react'
-import { PageHeading } from '@/components/site-shell'
-import { EnquiryForm } from '@/components/enquiry-form'
-import { pageHead,site } from '@/lib/site'
-export const Route=createFileRoute('/contact')({head:()=>pageHead('Contact Us','Contact Rabata and founder Tammana Rathore for learning support, volunteering or community partnerships.'),component:Contact})
-function Contact(){return <><PageHeading eyebrow="We’re here to connect" title="Let’s start a conversation." description="A question, an idea or a little time to give — we’d love to hear from you."/><section className="section"><div className="container form-layout"><div className="form-aside"><h2>Small conversations.<br/>Meaningful connections.</h2><p>Reach out about learning support, volunteering, mentorship, educational materials or a partnership.</p><div className="contact-detail"><Mail size={19}/><div><small>Email Rabata</small><a href={`mailto:${site.email}`}>{site.email}</a></div></div><div className="contact-detail"><MapPin size={19}/><div><small>Our community</small>Derabassi, Punjab, India<p>Please contact us before visiting.</p></div></div><div className="contact-detail"><Instagram size={19}/><div><small>Follow Rabata</small><a href={site.instagram} target="_blank" rel="noreferrer">@rabata._.official</a><small className="mt-3">Connect with our founder</small><a href={site.founderInstagram} target="_blank" rel="noreferrer">@rathore._.tammana</a></div></div></div><EnquiryForm kind="contact"/></div></section></>}
+import { createFileRoute } from "@tanstack/react-router";
+import { Instagram, Mail, MapPin, Phone } from "lucide-react";
+import { PageHeading } from "@/components/site-shell";
+import { EnquiryForm } from "@/components/enquiry-form";
+import { pageHead, site } from "@/lib/site";
+
+export const Route = createFileRoute("/contact")({
+  head: () =>
+    pageHead(
+      "Contact Us",
+      "Contact Rabata and founder Tammana Rathore for learning support, volunteering or community partnerships.",
+    ),
+  component: Contact,
+});
+
+function Contact() {
+  return (
+    <>
+      <PageHeading
+        eyebrow="We’re here to connect"
+        title="Let’s start a conversation."
+        description="A question, an idea or a little time to give — we’d love to hear from you."
+      />
+      <section className="section">
+        <div className="container form-layout">
+          <div className="form-aside">
+            <h2>
+              Small conversations.
+              <br />
+              Meaningful connections.
+            </h2>
+            <p>
+              Reach out about learning support, volunteering, mentorship, educational materials or a
+              partnership.
+            </p>
+            <div className="contact-detail">
+              <Phone size={19} />
+              <div>
+                <small>24×7 Multilingual AI Voice Helpline (Sarvam AI)</small>
+                <a href={`tel:${site.phone}`} className="font-semibold text-foreground">
+                  {site.phoneDisplay}
+                </a>
+                <p>Call anytime in Hindi, Punjabi, or English to register or enquire.</p>
+              </div>
+            </div>
+            <div className="contact-detail">
+              <Mail size={19} />
+              <div>
+                <small>Email Rabata</small>
+                <a href={`mailto:${site.email}`}>{site.email}</a>
+              </div>
+            </div>
+            <div className="contact-detail">
+              <MapPin size={19} />
+              <div>
+                <small>Our community</small>
+                Derabassi, Punjab, India
+                <p>Please contact us before visiting.</p>
+              </div>
+            </div>
+            <div className="contact-detail">
+              <Instagram size={19} />
+              <div>
+                <small>Follow Rabata</small>
+                <a href={site.instagram} target="_blank" rel="noreferrer">
+                  @rabata._.official
+                </a>
+                <small className="mt-3">Connect with our founder</small>
+                <a href={site.founderInstagram} target="_blank" rel="noreferrer">
+                  @rathore._.tammana
+                </a>
+              </div>
+            </div>
+          </div>
+          <EnquiryForm kind="contact" />
+        </div>
+      </section>
+    </>
+  );
+}

@@ -18,7 +18,7 @@ import classroom from "@/assets/rabata-classroom.jpeg.asset.json";
 import education from "@/assets/education.jpeg.asset.json";
 import food from "@/assets/food-drive.jpeg.asset.json";
 import space from "@/assets/space.jpeg.asset.json";
-import { pageHead } from "@/lib/site";
+import { pageHead, site } from "@/lib/site";
 import {
   fetchPublishedActivityPhotos,
   fetchPublishedStories,
@@ -94,7 +94,10 @@ function Index() {
               </Button>
             </div>
             <div className="hero-note">
-              <ShieldCheck size={14} /> Free learning · Guardian-safe records · Open fund ledger
+              <ShieldCheck size={14} /> Free learning · Guardian-safe records · Open fund ledger ·{" "}
+              <a href={`tel:${site.phone}`} className="underline">
+                AI Helpline {site.phoneDisplay}
+              </a>
             </div>
           </div>
 

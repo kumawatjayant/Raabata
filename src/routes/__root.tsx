@@ -13,6 +13,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { RabataChatWidget } from "@/components/rabata-chat-widget";
 import { Header, Footer } from "@/components/site-shell";
 
 function NotFoundComponent() {
@@ -137,6 +138,7 @@ function RootComponent() {
         <Outlet />
       </main>
       {!isConsoleRoute && <Footer />}
+      {!isConsoleRoute && <RabataChatWidget />}
     </QueryClientProvider>
   );
 }

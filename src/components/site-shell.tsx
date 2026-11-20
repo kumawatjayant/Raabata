@@ -1,6 +1,16 @@
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { ArrowUpRight, Heart, Instagram, Mail, MapPin, Menu, ShieldCheck, X } from "lucide-react";
+import {
+  ArrowUpRight,
+  Heart,
+  Instagram,
+  Mail,
+  MapPin,
+  Menu,
+  Phone,
+  ShieldCheck,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import logo from "@/assets/logo.jpeg.asset.json";
 import { LANGUAGE_OPTIONS, useLanguage } from "@/lib/i18n";
@@ -59,6 +69,9 @@ export function Header() {
                 </button>
               ))}
             </div>
+            <a href={`tel:${site.phone}`} title="Sarvam AI 24x7 Multilingual Helpline">
+              <Phone size={12} /> {site.phoneDisplay}
+            </a>
             <a href={site.instagram} target="_blank" rel="noreferrer">
               <Instagram size={12} /> Follow our journey <ArrowUpRight size={11} />
             </a>
@@ -178,6 +191,10 @@ export function Footer() {
           </div>
           <div className="footer-contact">
             <h3>Let’s stay connected</h3>
+            <a href={`tel:${site.phone}`} className="footer-social">
+              <Phone size={14} />
+              {site.phoneDisplay} (AI Voice Helpline)
+            </a>
             <a href={`mailto:${site.email}`} className="footer-social">
               <Mail size={14} />
               {site.email}

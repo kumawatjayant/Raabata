@@ -4,6 +4,12 @@ import { describe, expect, it } from "vitest";
 
 import { routeTree } from "@/routeTree.gen";
 import { TRANSLATIONS } from "@/lib/i18n";
+import {
+  createInitialChatSession,
+  generateRabataAgentReply,
+  parseSarvamWebhookPayload,
+  RABATA_SARVAM_SYSTEM_PROMPT,
+} from "@/lib/sarvam-agent";
 import { site } from "@/lib/site";
 import { resources } from "@/lib/resources";
 import { calculateFundSummary, extractYouTubeId, getQuizForLecture } from "@/lib/platform";
@@ -17,9 +23,11 @@ import {
 // Match routes without running loaders or rendering: loaders may need a server or
 // network the test run lacks, and jsdom never loads the stylesheets React waits on.
 describe("App routing & configuration", () => {
-  it("uses Rabata's official email and never a personal inbox", () => {
+  it("uses Rabata's official email, helpline phone, and never a personal inbox", () => {
     expect(site.email).toBe("rabataofficial111@gmail.com");
     expect(site.email).not.toContain("rathoretammana447");
+    expect(site.phone).toBe("+917965481661");
+    expect(site.phoneDisplay).toBe("+91 79654 81661");
   });
 
   it.each([
@@ -194,5 +202,57 @@ describe("Platform helpers", () => {
     expect(svg.startsWith("<svg")).toBe(true);
     expect(svg).toContain('aria-label="Verification QR code RBT-VER-RBT-2026-001"');
     expect(svg).toContain("<rect");
+  });
+
+  it("shares the unified Sarvam AI prompt, parses Samvaad webhook transcripts, and completes chatbot registration flows", () => {
+    expect(RABATA_SARVAM_SYSTEM_PROMPT).toContain("+917965481661");
+    expect(RABATA_SARVAM_SYSTEM_PROMPT).toContain("Tammana Rathore");
+    expect(RABATA_SARVAM_SYSTEM_PROMPT).toContain("1098");
+
+    const call = parseSarvamWebhookPayload(
+      JSON.stringify({
+        interaction_id: "20261120/test-hi",
+        user_phone_number: "+919814000001",
+        output_agent_variables: {
+          kind: "student",
+          name: "Diya",
+          email: "parent.diya@example.com",
+          classLevel: "4–5",
+          subjects: "English, Math",
+        },
+        interaction_transcript: [
+          {
+            turn_id: 1,
+            role: "user",
+            en_text: "Register my daughter Diya",
+            indic_text: "मेरी बेटी दीया का पंजीकरण करें",
+          },
+        ],
+      }),
+    );
+    expect(call.detected_language).toBe("hi-IN");
+    expect(call.output_agent_variables.name).toBe("Diya");
+    expect(call.interaction_transcript).toHaveLength(1);
+
+    let state = createInitialChatSession("en");
+    const emergency = generateRabataAgentReply("Someone is in danger", state, "en");
+    expect(emergency.reply).toContain("112");
+    expect(emergency.reply).toContain("1098");
+
+    for (const msg of [
+      "Register a student",
+      "Yes I am parent",
+      "Rohan",
+      "parent.rohan@example.com",
+      "6–8",
+      "English, Science",
+      "In person",
+    ]) {
+      state = generateRabataAgentReply(msg, state, "en").nextState;
+    }
+    const done = generateRabataAgentReply("Yes I consent", state, "en");
+    expect(done.completedEnquiry?.kind).toBe("student");
+    expect(done.completedEnquiry?.name).toBe("Rohan");
+    expect(done.completedEnquiry?.email).toBe("parent.rohan@example.com");
   });
 });

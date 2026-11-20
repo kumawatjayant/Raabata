@@ -1,8 +1,9 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Check, Link2, Mail, PhoneCall, Sparkles, Trash2, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AdminSarvamCallTracker } from "@/components/admin-sarvam-tracker";
 import { supabase } from "@/integrations/supabase/client";
 import { friendlyError, type RoleRow } from "@/lib/access";
 import { enquirySchema } from "@/lib/enquiry-schema";
@@ -21,6 +22,13 @@ import {
   type ProgressLogRow,
   type StudentRecordRow,
 } from "@/lib/platform";
+import {
+  prependSarvamCall,
+  readSarvamCalls,
+  updateSarvamCallStatus,
+  type SarvamCallRecord,
+} from "@/lib/sarvam-agent";
+import { site } from "@/lib/site";
 
 const VOICE_SCENARIOS = [
   {
@@ -74,15 +82,21 @@ export function AdminAccessAndEnquiriesPanel({
 }) {
   const qc = useQueryClient();
   const submitEnquiryFn = useServerFn(submitEnquiry);
+  const [sarvamCalls, setSarvamCalls] = useState<SarvamCallRecord[]>([]);
   const [kindFilter, setKindFilter] = useState<"all" | "student" | "volunteer" | "contact">("all");
   const [voiceName, setVoiceName] = useState<string>(VOICE_SCENARIOS[0].studentName);
   const [voiceEmail, setVoiceEmail] = useState<string>(VOICE_SCENARIOS[0].guardianEmail);
+  const [voicePhone, setVoicePhone] = useState<string>("+919814201104");
   const [voiceClass, setVoiceClass] = useState<string>(VOICE_SCENARIOS[0].classLevel);
   const [voiceSubjects, setVoiceSubjects] = useState<string>(VOICE_SCENARIOS[0].subjects);
   const [voiceLang, setVoiceLang] = useState<string>(VOICE_SCENARIOS[0].language);
   const [voiceFormat, setVoiceFormat] = useState<string>(VOICE_SCENARIOS[0].format);
   const [voiceTranscript, setVoiceTranscript] = useState<string>(VOICE_SCENARIOS[0].transcript);
   const [voiceBusy, setVoiceBusy] = useState(false);
+
+  useEffect(() => {
+    setSarvamCalls(readSarvamCalls());
+  }, []);
 
   function loadVoicePreset(presetId: string) {
     const found = VOICE_SCENARIOS.find((s) => s.id === presetId);
@@ -117,15 +131,64 @@ export function AdminAccessAndEnquiriesPanel({
 
     setVoiceBusy(true);
     try {
+      const nowIso = new Date().toISOString();
+      const detectedLang: SarvamCallRecord["detected_language"] =
+        voiceLang === "Hindi" ? "hi-IN" : voiceLang === "Punjabi" ? "pa-IN" : "en-IN";
+      const sarvamRecord: SarvamCallRecord = {
+        id: makeLocalId("srv"),
+        interaction_id: `${nowIso.slice(0, 10).replace(/-/g, "")}/samvaad-${Date.now()}`,
+        app_id: "rabata-samvaad-helpline",
+        deployment_id: "rabata-voice-prod-v3",
+        channel: "sarvam_voice_call",
+        user_phone_number: voicePhone.trim() || "+9198XXXXXXXX",
+        agent_phone_number: site.phone,
+        duration: 82.0,
+        status: "completed",
+        detected_language: detectedLang,
+        stt_model: "Saaras v2",
+        tts_model: "Bulbul v1",
+        llm_model: "Sarvam-M",
+        start_datetime: nowIso,
+        end_datetime: nowIso,
+        output_agent_variables: {
+          kind: "student",
+          name: parsed.data.name,
+          email: parsed.data.email,
+          classLevel: parsed.data.classLevel ?? "6–8",
+          subjects: parsed.data.subjects ?? "",
+          language: parsed.data.language ?? "Hindi",
+          format: parsed.data.format ?? "In person",
+          message: parsed.data.message,
+          consent: true,
+          resolved_intent: "student_registration",
+        },
+        interaction_transcript: [
+          {
+            turn_id: 1,
+            role: "agent",
+            en_text: `Namaste! Welcome to Rabata Helpline (${site.phoneDisplay}). Are you calling to register a student or volunteer?`,
+          },
+          {
+            turn_id: 2,
+            role: "user",
+            en_text: parsed.data.message,
+          },
+        ],
+      };
+
+      setSarvamCalls(prependSarvamCall(sarvamRecord));
+
       const localEntry: AdminEnquiryItem = {
-        id: makeLocalId("voice"),
-        created_at: new Date().toISOString(),
+        id: sarvamRecord.id,
+        created_at: nowIso,
         kind: "student",
         name: parsed.data.name,
         email: parsed.data.email,
         consent: true,
         details: {
-          channel: "Inbound Voice Agent",
+          channel: `Sarvam AI Voice Call (${site.phoneDisplay})`,
+          caller: sarvamRecord.user_phone_number,
+          interaction_id: sarvamRecord.interaction_id,
           classLevel: parsed.data.classLevel ?? "",
           subjects: parsed.data.subjects ?? "",
           language: parsed.data.language ?? "",
@@ -147,7 +210,7 @@ export function AdminAccessAndEnquiriesPanel({
       }
 
       onStatus(
-        `Inbound Voice Agent call for ${parsed.data.name} logged via enquirySchema. Review below and click “Add to Student Database” to enroll.`,
+        `Sarvam AI call & transcript logged for ${parsed.data.name} (${sarvamRecord.interaction_id}).`,
       );
       qc.invalidateQueries({ queryKey: ["admin-dashboard"] });
     } finally {
@@ -261,6 +324,31 @@ export function AdminAccessAndEnquiriesPanel({
 
   return (
     <div className="space-y-10">
+      <AdminSarvamCallTracker
+        calls={sarvamCalls}
+        onCallsChange={setSarvamCalls}
+        onStatus={onStatus}
+        onEnrollCall={async (call) => {
+          const vars = call.output_agent_variables;
+          await convertEnquiryToStudent({
+            id: call.id,
+            created_at: call.start_datetime,
+            kind: vars.kind,
+            name: vars.name,
+            email: vars.email,
+            consent: true,
+            details: {
+              classLevel: vars.classLevel ?? "6–8",
+              subjects: vars.subjects ?? "General support",
+              language: vars.language ?? "Hindi and English",
+              format: vars.format ?? "In person",
+              message: vars.message,
+            },
+          });
+          setSarvamCalls(updateSarvamCallStatus(call.id, "enrolled"));
+        }}
+      />
+
       <div>
         <h2>Access requests</h2>
         <p className="section-copy">
@@ -331,6 +419,14 @@ export function AdminAccessAndEnquiriesPanel({
               maxLength={100}
               value={voiceName}
               onChange={(e) => setVoiceName(e.target.value)}
+            />
+          </label>
+          <label className="field">
+            Caller Phone Number (Sarvam ANI)
+            <input
+              maxLength={40}
+              value={voicePhone}
+              onChange={(e) => setVoicePhone(e.target.value)}
             />
           </label>
           <label className="field">
