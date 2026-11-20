@@ -1,20 +1,12 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useState, type FormEvent } from "react";
-import { Check, Link2, Mail, PhoneCall, Sparkles, Trash2, UserPlus, X } from "lucide-react";
+import { useState, type FormEvent } from "react";
+import { Check, Link2, Mail, PhoneCall, Trash2, UserPlus, Webhook, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AdminSarvamCallTracker } from "@/components/admin-sarvam-tracker";
 import { supabase } from "@/integrations/supabase/client";
 import { friendlyError, type RoleRow } from "@/lib/access";
-import { enquirySchema } from "@/lib/enquiry-schema";
-import { submitEnquiry, type AdminEnquiryItem } from "@/lib/enquiries.functions";
-import {
-  appendLocalEnquiry,
-  isLocalDevHost,
-  makeLocalId,
-  shouldUseLocalMode,
-  updateLocalDb,
-} from "@/lib/local-store";
+import type { AdminEnquiryItem } from "@/lib/enquiries.functions";
+import { makeLocalId, shouldUseLocalMode, updateLocalDb } from "@/lib/local-store";
 import {
   CLASS_LEVELS,
   type AssignmentRow,
@@ -22,52 +14,7 @@ import {
   type ProgressLogRow,
   type StudentRecordRow,
 } from "@/lib/platform";
-import {
-  prependSarvamCall,
-  readSarvamCalls,
-  updateSarvamCallStatus,
-  type SarvamCallRecord,
-} from "@/lib/sarvam-agent";
-import { site } from "@/lib/site";
-
-const VOICE_SCENARIOS = [
-  {
-    id: "hindi-derabassi",
-    label: "Hindi Call · Derabassi",
-    studentName: "Ananya Kumari",
-    guardianEmail: "parent.ananya@example.com",
-    classLevel: "4–5",
-    subjects: "Spoken English, Mathematics",
-    language: "Hindi",
-    format: "In person",
-    transcript:
-      "Voice Agent Transcript (Hindi): Parent from Derabassi called the Rabata helpline requesting Class 5 English reading fluency and foundational Mathematics coaching.",
-  },
-  {
-    id: "punjabi-mubarakpur",
-    label: "Punjabi Call · Mubarakpur",
-    studentName: "Harpreet Singh",
-    guardianEmail: "family.harpreet@example.com",
-    classLevel: "6–8",
-    subjects: "Science, Computer Literacy",
-    language: "Punjabi",
-    format: "In person",
-    transcript:
-      "Voice Agent Transcript (Punjabi): Grandfather called to enroll Harpreet for after-school Science revision and basic computer typing.",
-  },
-  {
-    id: "youth-interview",
-    label: "Youth Call · Interview Prep",
-    studentName: "Simran Kaur",
-    guardianEmail: "simran.career@example.com",
-    classLevel: "Young adult",
-    subjects: "Spoken English, Career readiness",
-    language: "Hindi and English",
-    format: "Online",
-    transcript:
-      "Voice Agent Transcript (Bilingual): Young adult applicant preparing for retail store customer service interviews.",
-  },
-] as const;
+import type { SarvamCallRecord } from "@/lib/sarvam-agent";
 
 export function AdminAccessAndEnquiriesPanel({
   roles,
@@ -81,142 +28,8 @@ export function AdminAccessAndEnquiriesPanel({
   onStatus: (msg: string, isErr?: boolean) => void;
 }) {
   const qc = useQueryClient();
-  const submitEnquiryFn = useServerFn(submitEnquiry);
-  const [sarvamCalls, setSarvamCalls] = useState<SarvamCallRecord[]>([]);
+  const [subTab, setSubTab] = useState<"calls" | "inbox" | "setup">("calls");
   const [kindFilter, setKindFilter] = useState<"all" | "student" | "volunteer" | "contact">("all");
-  const [voiceName, setVoiceName] = useState<string>(VOICE_SCENARIOS[0].studentName);
-  const [voiceEmail, setVoiceEmail] = useState<string>(VOICE_SCENARIOS[0].guardianEmail);
-  const [voicePhone, setVoicePhone] = useState<string>("+919814201104");
-  const [voiceClass, setVoiceClass] = useState<string>(VOICE_SCENARIOS[0].classLevel);
-  const [voiceSubjects, setVoiceSubjects] = useState<string>(VOICE_SCENARIOS[0].subjects);
-  const [voiceLang, setVoiceLang] = useState<string>(VOICE_SCENARIOS[0].language);
-  const [voiceFormat, setVoiceFormat] = useState<string>(VOICE_SCENARIOS[0].format);
-  const [voiceTranscript, setVoiceTranscript] = useState<string>(VOICE_SCENARIOS[0].transcript);
-  const [voiceBusy, setVoiceBusy] = useState(false);
-
-  useEffect(() => {
-    setSarvamCalls(readSarvamCalls());
-  }, []);
-
-  function loadVoicePreset(presetId: string) {
-    const found = VOICE_SCENARIOS.find((s) => s.id === presetId);
-    if (!found) return;
-    setVoiceName(found.studentName);
-    setVoiceEmail(found.guardianEmail);
-    setVoiceClass(found.classLevel);
-    setVoiceSubjects(found.subjects);
-    setVoiceLang(found.language);
-    setVoiceFormat(found.format);
-    setVoiceTranscript(found.transcript);
-  }
-
-  async function simulateVoiceIntake(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const parsed = enquirySchema.safeParse({
-      kind: "student",
-      name: voiceName,
-      email: voiceEmail,
-      classLevel: voiceClass,
-      subjects: voiceSubjects,
-      language: voiceLang,
-      format: voiceFormat,
-      message: voiceTranscript,
-      consent: true,
-      website: "",
-    });
-    if (!parsed.success) {
-      onStatus(parsed.error.issues[0]?.message || "Invalid voice agent payload.", true);
-      return;
-    }
-
-    setVoiceBusy(true);
-    try {
-      const nowIso = new Date().toISOString();
-      const detectedLang: SarvamCallRecord["detected_language"] =
-        voiceLang === "Hindi" ? "hi-IN" : voiceLang === "Punjabi" ? "pa-IN" : "en-IN";
-      const sarvamRecord: SarvamCallRecord = {
-        id: makeLocalId("srv"),
-        interaction_id: `${nowIso.slice(0, 10).replace(/-/g, "")}/samvaad-${Date.now()}`,
-        app_id: "rabata-samvaad-helpline",
-        deployment_id: "rabata-voice-prod-v3",
-        channel: "sarvam_voice_call",
-        user_phone_number: voicePhone.trim() || "+9198XXXXXXXX",
-        agent_phone_number: site.phone,
-        duration: 82.0,
-        status: "completed",
-        detected_language: detectedLang,
-        stt_model: "Saaras v2",
-        tts_model: "Bulbul v1",
-        llm_model: "Sarvam-M",
-        start_datetime: nowIso,
-        end_datetime: nowIso,
-        output_agent_variables: {
-          kind: "student",
-          name: parsed.data.name,
-          email: parsed.data.email,
-          classLevel: parsed.data.classLevel ?? "6–8",
-          subjects: parsed.data.subjects ?? "",
-          language: parsed.data.language ?? "Hindi",
-          format: parsed.data.format ?? "In person",
-          message: parsed.data.message,
-          consent: true,
-          resolved_intent: "student_registration",
-        },
-        interaction_transcript: [
-          {
-            turn_id: 1,
-            role: "agent",
-            en_text: `Namaste! Welcome to Rabata Helpline (${site.phoneDisplay}). Are you calling to register a student or volunteer?`,
-          },
-          {
-            turn_id: 2,
-            role: "user",
-            en_text: parsed.data.message,
-          },
-        ],
-      };
-
-      setSarvamCalls(prependSarvamCall(sarvamRecord));
-
-      const localEntry: AdminEnquiryItem = {
-        id: sarvamRecord.id,
-        created_at: nowIso,
-        kind: "student",
-        name: parsed.data.name,
-        email: parsed.data.email,
-        consent: true,
-        details: {
-          channel: `Sarvam AI Voice Call (${site.phoneDisplay})`,
-          caller: sarvamRecord.user_phone_number,
-          interaction_id: sarvamRecord.interaction_id,
-          classLevel: parsed.data.classLevel ?? "",
-          subjects: parsed.data.subjects ?? "",
-          language: parsed.data.language ?? "",
-          format: parsed.data.format ?? "",
-          message: parsed.data.message,
-        },
-      };
-
-      if (isLocalDevHost()) {
-        appendLocalEnquiry(localEntry);
-      }
-
-      if (!shouldUseLocalMode()) {
-        const res = await submitEnquiryFn({ data: parsed.data });
-        if (!res.success && !isLocalDevHost()) {
-          onStatus(res.message || "Voice agent intake could not be saved.", true);
-          return;
-        }
-      }
-
-      onStatus(
-        `Sarvam AI call & transcript logged for ${parsed.data.name} (${sarvamRecord.interaction_id}).`,
-      );
-      qc.invalidateQueries({ queryKey: ["admin-dashboard"] });
-    } finally {
-      setVoiceBusy(false);
-    }
-  }
 
   async function review(id: string, decision: "active" | "rejected") {
     if (shouldUseLocalMode()) {
@@ -322,246 +135,198 @@ export function AdminAccessAndEnquiriesPanel({
     (item) => kindFilter === "all" || item.kind === kindFilter,
   );
 
+  async function enrollCall(call: SarvamCallRecord) {
+    const vars = call.output_agent_variables;
+    await convertEnquiryToStudent({
+      id: call.id,
+      created_at: call.start_datetime,
+      kind: vars.kind,
+      name: vars.name,
+      email: vars.email,
+      consent: true,
+      details: {
+        classLevel: vars.classLevel ?? "6–8",
+        subjects: vars.subjects ?? "General support",
+        language: vars.language ?? "Hindi and English",
+        format: vars.format ?? "In person",
+        message: vars.message,
+      },
+    });
+  }
+
   return (
-    <div className="space-y-10">
-      <AdminSarvamCallTracker
-        calls={sarvamCalls}
-        onCallsChange={setSarvamCalls}
-        onStatus={onStatus}
-        onEnrollCall={async (call) => {
-          const vars = call.output_agent_variables;
-          await convertEnquiryToStudent({
-            id: call.id,
-            created_at: call.start_datetime,
-            kind: vars.kind,
-            name: vars.name,
-            email: vars.email,
-            consent: true,
-            details: {
-              classLevel: vars.classLevel ?? "6–8",
-              subjects: vars.subjects ?? "General support",
-              language: vars.language ?? "Hindi and English",
-              format: vars.format ?? "In person",
-              message: vars.message,
-            },
-          });
-          setSarvamCalls(updateSarvamCallStatus(call.id, "enrolled"));
-        }}
-      />
-
-      <div>
-        <h2>Access requests</h2>
-        <p className="section-copy">
-          Approve or reject mentor and student sign-up requests before granting access to any
-          database records.
-        </p>
-        {roles.filter((r) => r.role !== "admin").length === 0 ? (
-          <div className="empty-state mt-4">No accounts have requested access yet.</div>
-        ) : (
-          <div className="mt-4 grid gap-3">
-            {roles
-              .filter((r) => r.role !== "admin")
-              .map((r) => (
-                <div key={r.id} className="ledger-row" style={{ padding: 16 }}>
-                  <div>
-                    <strong>{names[r.user_id] || "Unnamed account"}</strong>{" "}
-                    <span className="pill-badge capitalize">{r.role}</span>{" "}
-                    <span className={`pill-badge ${r.status === "active" ? "pill-green" : ""}`}>
-                      {r.status === "active" ? "approved" : r.status}
-                    </span>
-                  </div>
-                  {r.status === "pending" && (
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={() => review(r.id, "active")}>
-                        <Check size={14} /> Approve
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => review(r.id, "rejected")}>
-                        <X size={14} /> Reject
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              ))}
-          </div>
-        )}
+    <div className="space-y-8">
+      <div className="admin-tabs" role="tablist" aria-label="Calls and enquiries workspace">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={subTab === "calls"}
+          className="tab-btn"
+          onClick={() => setSubTab("calls")}
+        >
+          <PhoneCall size={14} /> Calls &amp; Transcripts (+91 79654 81661)
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={subTab === "inbox"}
+          className="tab-btn"
+          onClick={() => setSubTab("inbox")}
+        >
+          <Mail size={14} /> Website Enquiries &amp; Role Approvals ({filteredEnquiries.length})
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={subTab === "setup"}
+          className="tab-btn"
+          onClick={() => setSubTab("setup")}
+        >
+          <Webhook size={14} /> Sarvam Webhook, API &amp; Prompt Setup
+        </button>
       </div>
 
-      <form className="form-panel" onSubmit={simulateVoiceIntake}>
-        <div className="eyebrow">
-          <PhoneCall size={13} /> Inbound Calling Voice Agent · Live Helpline Simulator
-        </div>
-        <h2>Automated Voice Call Student Intake</h2>
-        <p className="section-copy">
-          Parents who cannot read or type English can call Rabata’s multilingual voice helpline in
-          Hindi or Punjabi. The voice agent captures structured admission details validated through{" "}
-          <code>enquirySchema</code> and pushes them straight into the Admin Enquiries Inbox.
-        </p>
+      {subTab === "calls" && (
+        <AdminSarvamCallTracker
+          dbEnquiries={enquiries}
+          mode="logs"
+          onEnrollCall={enrollCall}
+          onStatus={onStatus}
+        />
+      )}
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          {VOICE_SCENARIOS.map((preset) => (
-            <Button
-              key={preset.id}
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => loadVoicePreset(preset.id)}
-            >
-              <Sparkles size={13} /> {preset.label}
-            </Button>
-          ))}
-        </div>
+      {subTab === "setup" && (
+        <AdminSarvamCallTracker
+          dbEnquiries={enquiries}
+          mode="setup"
+          onEnrollCall={enrollCall}
+          onStatus={onStatus}
+        />
+      )}
 
-        <div className="form-grid mt-5">
-          <label className="field">
-            Caller / Student First Name *
-            <input
-              required
-              maxLength={100}
-              value={voiceName}
-              onChange={(e) => setVoiceName(e.target.value)}
-            />
-          </label>
-          <label className="field">
-            Caller Phone Number (Sarvam ANI)
-            <input
-              maxLength={40}
-              value={voicePhone}
-              onChange={(e) => setVoicePhone(e.target.value)}
-            />
-          </label>
-          <label className="field">
-            Parent / Contact Email *
-            <input
-              type="email"
-              required
-              maxLength={255}
-              value={voiceEmail}
-              onChange={(e) => setVoiceEmail(e.target.value)}
-            />
-          </label>
-          <label className="field">
-            Class Level *
-            <select value={voiceClass} onChange={(e) => setVoiceClass(e.target.value)}>
-              {CLASS_LEVELS.filter((c) => c !== "All").map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            Subjects Needed *
-            <input
-              required
-              maxLength={200}
-              value={voiceSubjects}
-              onChange={(e) => setVoiceSubjects(e.target.value)}
-            />
-          </label>
-          <label className="field">
-            Spoken Language Detected
-            <select value={voiceLang} onChange={(e) => setVoiceLang(e.target.value)}>
-              <option value="Hindi">Hindi</option>
-              <option value="Punjabi">Punjabi</option>
-              <option value="English">English</option>
-              <option value="Hindi and English">Hindi and English</option>
-            </select>
-          </label>
-          <label className="field">
-            Preferred Format
-            <select value={voiceFormat} onChange={(e) => setVoiceFormat(e.target.value)}>
-              <option value="In person">In person</option>
-              <option value="Online">Online</option>
-              <option value="Either">Either</option>
-            </select>
-          </label>
-          <label className="field wide">
-            Extracted Voice Call Summary / Transcript *
-            <textarea
-              required
-              minLength={5}
-              maxLength={2000}
-              value={voiceTranscript}
-              onChange={(e) => setVoiceTranscript(e.target.value)}
-            />
-          </label>
-        </div>
-
-        <Button type="submit" disabled={voiceBusy} className="mt-4">
-          <PhoneCall size={14} />{" "}
-          {voiceBusy ? "Logging Voice Call Intake…" : "Simulate Inbound Voice Agent Call"}
-        </Button>
-      </form>
-
-      <div>
-        <div className="section-head">
+      {subTab === "inbox" && (
+        <div className="space-y-10">
           <div>
-            <div className="eyebrow">
-              <Mail size={13} /> Server-verified inbox
-            </div>
-            <h2>Submitted enquiries &amp; registrations ({filteredEnquiries.length})</h2>
+            <h2>Access requests</h2>
             <p className="section-copy">
-              Contact, student registration and volunteer applications submitted through the public
-              forms. Stored server-side only.
+              Approve or reject mentor and student sign-up requests before granting access to any
+              database records.
             </p>
-          </div>
-          <select
-            aria-label="Filter enquiries by type"
-            className="border rounded px-3 py-2 text-xs bg-background"
-            value={kindFilter}
-            onChange={(e) =>
-              setKindFilter(e.target.value as "all" | "student" | "volunteer" | "contact")
-            }
-          >
-            <option value="all">All submissions</option>
-            <option value="student">Student registrations</option>
-            <option value="volunteer">Volunteer applications</option>
-            <option value="contact">General contact messages</option>
-          </select>
-        </div>
-
-        {filteredEnquiries.length === 0 ? (
-          <div className="empty-state">No enquiries match this filter yet.</div>
-        ) : (
-          <div className="grid gap-3">
-            {filteredEnquiries.map((item) => (
-              <article key={item.id} className="ledger-row" style={{ alignItems: "flex-start" }}>
-                <div className="ledger-main">
-                  <div className="ledger-badges">
-                    <span className="pill-badge pill-green capitalize">{item.kind}</span>
-                    {item.details["channel"] && (
-                      <span className="pill-badge pill-gold">
-                        <PhoneCall size={11} /> {item.details["channel"]}
-                      </span>
-                    )}
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(item.created_at).toLocaleDateString("en-IN")}
-                    </span>
-                  </div>
-                  <h3 className="mt-2 text-base font-semibold">
-                    {item.name} ·{" "}
-                    <span className="font-normal text-muted-foreground">{item.email}</span>
-                  </h3>
-                  <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-                    {Object.entries(item.details).map(([k, val]) =>
-                      val ? (
-                        <div key={k}>
-                          <strong className="capitalize text-foreground">{k}:</strong> {String(val)}
+            {roles.filter((r) => r.role !== "admin").length === 0 ? (
+              <div className="empty-state mt-4">No accounts have requested access yet.</div>
+            ) : (
+              <div className="mt-4 grid gap-3">
+                {roles
+                  .filter((r) => r.role !== "admin")
+                  .map((r) => (
+                    <div key={r.id} className="ledger-row" style={{ padding: 16 }}>
+                      <div>
+                        <strong>{names[r.user_id] || "Unnamed account"}</strong>{" "}
+                        <span className="pill-badge capitalize">{r.role}</span>{" "}
+                        <span className={`pill-badge ${r.status === "active" ? "pill-green" : ""}`}>
+                          {r.status === "active" ? "approved" : r.status}
+                        </span>
+                      </div>
+                      {r.status === "pending" && (
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={() => review(r.id, "active")}>
+                            <Check size={14} /> Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => review(r.id, "rejected")}
+                          >
+                            <X size={14} /> Reject
+                          </Button>
                         </div>
-                      ) : null,
-                    )}
-                  </div>
-                </div>
-                {item.kind === "student" && (
-                  <Button size="sm" variant="outline" onClick={() => convertEnquiryToStudent(item)}>
-                    <UserPlus size={14} /> Add to Student Database
-                  </Button>
-                )}
-              </article>
-            ))}
+                      )}
+                    </div>
+                  ))}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+
+          <div>
+            <div className="section-head">
+              <div>
+                <div className="eyebrow">
+                  <Mail size={13} /> Server-verified inbox
+                </div>
+                <h2>Submitted enquiries &amp; registrations ({filteredEnquiries.length})</h2>
+                <p className="section-copy">
+                  Contact, student registration and volunteer applications submitted through forms,
+                  Sarvam AI calls, or the website AI chatbot.
+                </p>
+              </div>
+              <select
+                aria-label="Filter enquiries by type"
+                className="border rounded px-3 py-2 text-xs bg-background"
+                value={kindFilter}
+                onChange={(e) =>
+                  setKindFilter(e.target.value as "all" | "student" | "volunteer" | "contact")
+                }
+              >
+                <option value="all">All submissions</option>
+                <option value="student">Student registrations</option>
+                <option value="volunteer">Volunteer applications</option>
+                <option value="contact">General contact messages</option>
+              </select>
+            </div>
+
+            {filteredEnquiries.length === 0 ? (
+              <div className="empty-state">No enquiries match this filter yet.</div>
+            ) : (
+              <div className="grid gap-3">
+                {filteredEnquiries.map((item) => (
+                  <article
+                    key={item.id}
+                    className="ledger-row"
+                    style={{ alignItems: "flex-start" }}
+                  >
+                    <div className="ledger-main">
+                      <div className="ledger-badges">
+                        <span className="pill-badge pill-green capitalize">{item.kind}</span>
+                        {item.details["channel"] && (
+                          <span className="pill-badge pill-gold">
+                            <PhoneCall size={11} /> {item.details["channel"]}
+                          </span>
+                        )}
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(item.created_at).toLocaleDateString("en-IN")}
+                        </span>
+                      </div>
+                      <h3 className="mt-2 text-base font-semibold">
+                        {item.name} ·{" "}
+                        <span className="font-normal text-muted-foreground">{item.email}</span>
+                      </h3>
+                      <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                        {Object.entries(item.details).map(([k, val]) =>
+                          val && k !== "interaction_transcript" ? (
+                            <div key={k}>
+                              <strong className="capitalize text-foreground">{k}:</strong>{" "}
+                              {String(val)}
+                            </div>
+                          ) : null,
+                        )}
+                      </div>
+                    </div>
+                    {item.kind === "student" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => convertEnquiryToStudent(item)}
+                      >
+                        <UserPlus size={14} /> Add to Student Database
+                      </Button>
+                    )}
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

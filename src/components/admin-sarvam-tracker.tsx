@@ -1,92 +1,247 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   Bot,
+  Check,
   ChevronDown,
   ChevronUp,
   Clock,
+  Copy,
   Download,
   FileCode2,
   MessageSquareText,
   Phone,
+  RefreshCw,
+  Search,
   UserPlus,
   Webhook,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { appendLocalEnquiry, isLocalDevHost } from "@/lib/local-store";
 import type { AdminEnquiryItem } from "@/lib/enquiries.functions";
+import { appendLocalEnquiry, isLocalDevHost } from "@/lib/local-store";
 import {
-  parseSarvamWebhookPayload,
+  convertEnquiriesToSarvamCalls,
   prependSarvamCall,
   RABATA_SARVAM_SYSTEM_PROMPT,
+  readSarvamCalls,
+  updateSarvamCallStatus,
+  writeSarvamCalls,
   type SarvamCallRecord,
 } from "@/lib/sarvam-agent";
 import { site } from "@/lib/site";
 
-const SAMPLE_SARVAM_WEBHOOK = JSON.stringify(
-  {
-    app_id: "rabata-samvaad-helpline",
-    app_version: 3,
-    deployment_id: "rabata-voice-prod-v3",
-    interaction_id: "20261120/samvaad-demo-webhook",
-    user_phone_number: "+919877123450",
-    agent_phone_number: "+917965481661",
-    duration: 72.5,
-    status: "completed",
-    output_agent_variables: {
-      kind: "student",
-      name: "Riya",
-      email: "parent.riya@example.com",
-      classLevel: "6–8",
-      subjects: "Spoken English, Mathematics",
-      language: "Hindi",
-      format: "In person",
-      consent: true,
-    },
-    interaction_transcript: [
-      {
-        turn_id: 1,
-        role: "agent",
-        en_text: "Namaste! Welcome to Rabata. Are you calling to register a student or volunteer?",
-        indic_text: "नमस्ते! राबता में आपका स्वागत है। क्या आप छात्र पंजीकरण के लिए कॉल कर रहे हैं?",
-      },
-      {
-        turn_id: 2,
-        role: "user",
-        en_text: "Yes, I want to enroll my daughter Riya in Class 7 for English and Maths.",
-        indic_text: "हाँ, मुझे अपनी बेटी रिया (कक्षा 7) का अंग्रेज़ी और गणित के लिए नाम लिखवाना है।",
-      },
-    ],
-  },
-  null,
-  2,
-);
-
 export function AdminSarvamCallTracker({
-  calls,
-  onCallsChange,
+  dbEnquiries,
+  mode,
   onEnrollCall,
   onStatus,
 }: {
-  calls: SarvamCallRecord[];
-  onCallsChange: (next: SarvamCallRecord[]) => void;
+  dbEnquiries: AdminEnquiryItem[];
+  mode: "logs" | "setup";
   onEnrollCall: (call: SarvamCallRecord) => Promise<void>;
   onStatus: (msg: string, isErr?: boolean) => void;
 }) {
+  const [localCalls, setLocalCalls] = useState<SarvamCallRecord[]>([]);
+  const [serverCalls, setServerCalls] = useState<SarvamCallRecord[]>([]);
   const [channelFilter, setChannelFilter] = useState<
     "all" | "sarvam_voice_call" | "rabata_web_chatbot"
   >("all");
-  const [expandedCallId, setExpandedCallId] = useState<string | null>(calls[0]?.id ?? "srv-call-1");
-  const [showIntegrationSpec, setShowIntegrationSpec] = useState(false);
-  const [webhookJson, setWebhookJson] = useState(SAMPLE_SARVAM_WEBHOOK);
+  const [search, setSearch] = useState("");
+  const [expandedCallId, setExpandedCallId] = useState<string | null>("srv-call-1");
+  const [copiedUrl, setCopiedUrl] = useState(false);
 
-  const voiceCount = calls.filter((c) => c.channel === "sarvam_voice_call").length;
-  const chatCount = calls.filter((c) => c.channel === "rabata_web_chatbot").length;
+  // Sarvam Workspace Analytics Sync state
+  const [orgId, setOrgId] = useState("");
+  const [workspaceId, setWorkspaceId] = useState("");
+  const [appId, setAppId] = useState("");
+  const [sarvamApiKey, setSarvamApiKey] = useState("");
+  const [syncing, setSyncing] = useState(false);
+
+  // Live Webhook Test state
+  const [testName, setTestName] = useState("Diya Sharma");
+  const [testPhone, setTestPhone] = useState("+919877123450");
+  const [testEmail, setTestEmail] = useState("parent.diya@example.com");
+  const [testClass, setTestClass] = useState("4–5");
+  const [testSubjects, setTestSubjects] = useState("Spoken English, Mathematics");
+  const [testIndic, setTestIndic] = useState(
+    "नमस्ते, मेरी बेटी दीया कक्षा 5 में है और उसे अंग्रेज़ी व गणित सीखनी है।",
+  );
+  const [testBusy, setTestBusy] = useState(false);
+
+  async function refreshFromServer() {
+    try {
+      const res = await fetch("/api/sarvam-calls");
+      if (res.ok) {
+        const body = (await res.json()) as { ok?: boolean; calls?: SarvamCallRecord[] };
+        if (body.ok && Array.isArray(body.calls)) {
+          setServerCalls(body.calls);
+        }
+      }
+    } catch {
+      // ignore offline preview errors
+    }
+  }
+
+  useEffect(() => {
+    setLocalCalls(readSarvamCalls());
+    void refreshFromServer();
+  }, []);
+
+  const allCalls = useMemo(() => {
+    const dbDerived = convertEnquiriesToSarvamCalls(dbEnquiries);
+    const seen = new Set<string>();
+    const combined: SarvamCallRecord[] = [];
+    for (const item of [...serverCalls, ...dbDerived, ...localCalls]) {
+      if (!seen.has(item.interaction_id)) {
+        seen.add(item.interaction_id);
+        combined.push(item);
+      }
+    }
+    return combined;
+  }, [dbEnquiries, localCalls, serverCalls]);
+
+  const filteredCalls = allCalls.filter((c) => {
+    const matchesChannel = channelFilter === "all" || c.channel === channelFilter;
+    const text =
+      `${c.user_phone_number} ${c.interaction_id} ${c.output_agent_variables.name} ${c.output_agent_variables.email} ${c.output_agent_variables.subjects ?? ""} ${JSON.stringify(c.interaction_transcript)}`.toLowerCase();
+    return matchesChannel && text.includes(search.toLowerCase());
+  });
+
+  const voiceCount = allCalls.filter((c) => c.channel === "sarvam_voice_call").length;
+  const chatCount = allCalls.filter((c) => c.channel === "rabata_web_chatbot").length;
   const avgDuration =
-    calls.length > 0
-      ? Math.round(calls.reduce((sum, c) => sum + Number(c.duration || 0), 0) / calls.length)
+    allCalls.length > 0
+      ? Math.round(allCalls.reduce((sum, c) => sum + Number(c.duration || 0), 0) / allCalls.length)
       : 0;
 
-  const filteredCalls = calls.filter((c) => channelFilter === "all" || c.channel === channelFilter);
+  const webhookUrl =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/api/sarvam-webhook`
+      : "https://rabata-hub-connect-main.vercel.app/api/sarvam-webhook";
+
+  async function handleCopyWebhook() {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      await navigator.clipboard.writeText(webhookUrl);
+      setCopiedUrl(true);
+      setTimeout(() => setCopiedUrl(false), 2000);
+    }
+  }
+
+  async function handleSyncSarvamAnalytics(e: FormEvent) {
+    e.preventDefault();
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/sarvam-sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orgId, workspaceId, appId, apiKey: sarvamApiKey }),
+      });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        count?: number;
+        calls?: SarvamCallRecord[];
+        error?: string;
+      };
+      if (!res.ok || !json.ok || !json.calls) {
+        onStatus(json.error || "Unable to sync from Sarvam Analytics API.", true);
+        return;
+      }
+      const next = [...json.calls, ...localCalls];
+      writeSarvamCalls(next);
+      setLocalCalls(next);
+      await refreshFromServer();
+      onStatus(`Synced ${json.count ?? json.calls.length} real Sarvam calls & transcripts.`);
+    } catch {
+      onStatus("Failed to connect to Sarvam Analytics proxy.", true);
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function handleSendTestWebhook(e: FormEvent) {
+    e.preventDefault();
+    setTestBusy(true);
+    try {
+      const payload = {
+        app_id: "rabata-samvaad-helpline",
+        app_version: 3,
+        deployment_id: "rabata-voice-prod-v3",
+        interaction_id: `${new Date().toISOString().slice(0, 10).replace(/-/g, "")}/samvaad-${Date.now()}`,
+        user_phone_number: testPhone,
+        agent_phone_number: site.phone,
+        duration: 68.5,
+        status: "completed",
+        output_agent_variables: {
+          kind: "student",
+          name: testName,
+          email: testEmail,
+          classLevel: testClass,
+          subjects: testSubjects,
+          language: "Hindi",
+          format: "In person",
+          consent: true,
+        },
+        interaction_transcript: [
+          {
+            turn_id: 1,
+            role: "agent",
+            en_text: `Namaste! Welcome to Rabata Helpline (${site.phoneDisplay}). Are you calling to register a student or volunteer?`,
+            indic_text: `नमस्ते! राबता हेल्पलाइन (${site.phoneDisplay}) में आपका स्वागत है।`,
+          },
+          {
+            turn_id: 2,
+            role: "user",
+            en_text: `I want to register ${testName} (${testClass}) for ${testSubjects}. Contact: ${testEmail}`,
+            indic_text: testIndic,
+          },
+        ],
+      };
+
+      const res = await fetch("/api/sarvam-webhook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        record?: SarvamCallRecord;
+        persistedToSupabase?: boolean;
+      };
+      if (res.ok && json.ok && json.record) {
+        setLocalCalls(prependSarvamCall(json.record));
+        setExpandedCallId(json.record.id);
+        await refreshFromServer();
+        if (isLocalDevHost()) {
+          appendLocalEnquiry({
+            id: json.record.id,
+            created_at: json.record.start_datetime,
+            kind: "student",
+            name: json.record.output_agent_variables.name,
+            email: json.record.output_agent_variables.email,
+            consent: true,
+            details: {
+              channel: `Sarvam AI Voice Call (${site.phoneDisplay})`,
+              caller: json.record.user_phone_number,
+              interaction_id: json.record.interaction_id,
+              classLevel: json.record.output_agent_variables.classLevel ?? "",
+              subjects: json.record.output_agent_variables.subjects ?? "",
+              message: json.record.output_agent_variables.message,
+            },
+          });
+        }
+        onStatus(
+          `Live POST /api/sarvam-webhook succeeded (${json.record.interaction_id})${
+            json.persistedToSupabase ? " & saved to Postgres!" : "."
+          }`,
+        );
+      } else {
+        onStatus("Webhook test endpoint rejected payload.", true);
+      }
+    } catch {
+      onStatus("Error contacting /api/sarvam-webhook.", true);
+    } finally {
+      setTestBusy(false);
+    }
+  }
 
   function downloadTranscriptJson(call: SarvamCallRecord) {
     if (typeof window === "undefined") return;
@@ -101,41 +256,150 @@ export function AdminSarvamCallTracker({
     URL.revokeObjectURL(url);
   }
 
-  function handleIngestWebhook() {
-    try {
-      const record = parseSarvamWebhookPayload(webhookJson);
-      const next = prependSarvamCall(record);
-      onCallsChange(next);
-      setExpandedCallId(record.id);
+  if (mode === "setup") {
+    return (
+      <div className="space-y-8">
+        <div className="form-panel space-y-4">
+          <div className="eyebrow">
+            <Webhook size={13} /> Step 1 · Connect Your Sarvam AI Samvaad Agent
+          </div>
+          <h2>Live Webhook Endpoint for Helpline {site.phoneDisplay}</h2>
+          <p className="section-copy">
+            In your <strong>Sarvam Dashboard → Settings → Webhooks</strong>, set the Callback URL
+            below. When any phone call to <strong>{site.phoneDisplay}</strong> finishes, Sarvam
+            automatically sends the bilingual transcript (<code>interaction_transcript</code>) and
+            extracted fields straight into Rabata&apos;s Call Tracker &amp; Enquiries Inbox.
+          </p>
+          <div className="flex flex-wrap items-center gap-2 bg-muted p-3 rounded-lg border">
+            <code className="text-xs flex-1 break-all">{webhookUrl}</code>
+            <Button size="sm" variant="outline" onClick={handleCopyWebhook}>
+              {copiedUrl ? <Check size={14} /> : <Copy size={14} />}
+              {copiedUrl ? "Copied!" : "Copy URL"}
+            </Button>
+          </div>
+          <div className="grid gap-1 text-xs text-muted-foreground">
+            <div>
+              <strong>Optional Env Security:</strong> Add{" "}
+              <code>SARVAM_WEBHOOK_SECRET=whsec_...</code> on Vercel to verify{" "}
+              <code>Sarvam-Signature</code> + <code>Sarvam-Timestamp</code>.
+            </div>
+            <div>
+              <strong>Live AI Chatbot Key:</strong> Add <code>SARVAM_API_KEY</code> on Vercel to
+              enable live Sarvam AI LLM completions on <code>POST /api/sarvam-chat</code>.
+            </div>
+          </div>
+        </div>
 
-      const vars = record.output_agent_variables;
-      if (isLocalDevHost()) {
-        const entry: AdminEnquiryItem = {
-          id: record.id,
-          created_at: record.start_datetime,
-          kind: vars.kind,
-          name: vars.name,
-          email: vars.email,
-          consent: vars.consent,
-          details: {
-            channel: "Sarvam Samvaad Webhook",
-            caller: record.user_phone_number,
-            interaction_id: record.interaction_id,
-            classLevel: vars.classLevel ?? "",
-            subjects: vars.subjects ?? "",
-            language: vars.language ?? "",
-            message: vars.message,
-          },
-        };
-        appendLocalEnquiry(entry);
-      }
+        <form className="form-panel space-y-4" onSubmit={handleSyncSarvamAnalytics}>
+          <div className="eyebrow">
+            <RefreshCw size={13} /> Step 2 · Pull Historical Calls from Sarvam Analytics API
+          </div>
+          <h3>Fetch Existing Call Logs &amp; Transcripts</h3>
+          <p className="text-xs text-muted-foreground">
+            Queries{" "}
+            <code>
+              https://apps.sarvam.ai/api/analytics/v1/{"{org_id}"}/{"{workspace_id}"}/{"{app_id}"}
+              /interactions?include_transcript=true
+            </code>{" "}
+            server-side using your Sarvam <code>X-API-Key</code>.
+          </p>
+          <div className="form-grid">
+            <label className="field">
+              Organization ID (org_id) *
+              <input
+                required
+                value={orgId}
+                onChange={(e) => setOrgId(e.target.value)}
+                placeholder="org-..."
+              />
+            </label>
+            <label className="field">
+              Workspace ID (workspace_id) *
+              <input
+                required
+                value={workspaceId}
+                onChange={(e) => setWorkspaceId(e.target.value)}
+                placeholder="ws-..."
+              />
+            </label>
+            <label className="field">
+              Agent / App ID (app_id) *
+              <input
+                required
+                value={appId}
+                onChange={(e) => setAppId(e.target.value)}
+                placeholder="app-..."
+              />
+            </label>
+            <label className="field">
+              Sarvam Workspace X-API-Key *
+              <input
+                type="password"
+                required
+                value={sarvamApiKey}
+                onChange={(e) => setSarvamApiKey(e.target.value)}
+                placeholder="Used on-demand server-side; not stored"
+              />
+            </label>
+          </div>
+          <Button type="submit" disabled={syncing}>
+            <RefreshCw size={14} className={syncing ? "animate-spin" : ""} />
+            {syncing ? "Syncing from Sarvam…" : "Fetch Calls & Transcripts from Sarvam"}
+          </Button>
+        </form>
 
-      onStatus(
-        `Parsed Sarvam Samvaad webhook ${record.interaction_id} (${record.interaction_transcript.length} transcript turns).`,
-      );
-    } catch {
-      onStatus("Invalid Sarvam webhook JSON payload.", true);
-    }
+        <form className="form-panel space-y-4" onSubmit={handleSendTestWebhook}>
+          <div className="eyebrow">
+            <Phone size={13} /> Step 3 · Verify End-to-End Webhook Ingestion
+          </div>
+          <h3>Send Live Test Call to /api/sarvam-webhook</h3>
+          <div className="form-grid">
+            <label className="field">
+              Student / Caller Name *
+              <input required value={testName} onChange={(e) => setTestName(e.target.value)} />
+            </label>
+            <label className="field">
+              Caller Phone *
+              <input required value={testPhone} onChange={(e) => setTestPhone(e.target.value)} />
+            </label>
+            <label className="field">
+              Email *
+              <input
+                type="email"
+                required
+                value={testEmail}
+                onChange={(e) => setTestEmail(e.target.value)}
+              />
+            </label>
+            <label className="field">
+              Class Level
+              <input value={testClass} onChange={(e) => setTestClass(e.target.value)} />
+            </label>
+            <label className="field wide">
+              Subjects Requested
+              <input value={testSubjects} onChange={(e) => setTestSubjects(e.target.value)} />
+            </label>
+            <label className="field wide">
+              Hindi / Punjabi User Turn (indic_text)
+              <input value={testIndic} onChange={(e) => setTestIndic(e.target.value)} />
+            </label>
+          </div>
+          <Button type="submit" disabled={testBusy}>
+            <Webhook size={14} />
+            {testBusy ? "Sending POST /api/sarvam-webhook…" : "Send Live Webhook Test Call"}
+          </Button>
+        </form>
+
+        <details className="form-panel">
+          <summary className="cursor-pointer font-semibold text-primary flex items-center gap-2 text-sm">
+            <FileCode2 size={16} /> Shared System Prompt for Sarvam Voice Agent &amp; Web Chatbot
+          </summary>
+          <pre className="mt-4 whitespace-pre-wrap text-xs bg-muted p-4 rounded-lg border leading-relaxed">
+            {RABATA_SARVAM_SYSTEM_PROMPT}
+          </pre>
+        </details>
+      </div>
+    );
   }
 
   return (
@@ -152,9 +416,9 @@ export function AdminSarvamCallTracker({
         </article>
         <article className="stat-card">
           <div className="stat-label">
-            <MessageSquareText size={15} /> Total Calls &amp; Chats
+            <MessageSquareText size={15} /> Tracked Conversations
           </div>
-          <div className="stat-value">{calls.length}</div>
+          <div className="stat-value">{allCalls.length}</div>
           <small className="stat-note">
             {voiceCount} phone calls · {chatCount} web AI chats
           </small>
@@ -164,105 +428,44 @@ export function AdminSarvamCallTracker({
             <Clock size={15} /> Avg Call Duration
           </div>
           <div className="stat-value">{avgDuration}s</div>
-          <small className="stat-note">With turn-by-turn transcripts</small>
+          <small className="stat-note">Turn-by-turn transcript log</small>
         </article>
         <article className="stat-card">
           <div className="stat-label">
-            <Bot size={15} /> Indic Languages
+            <Bot size={15} /> Languages Handled
           </div>
           <div className="stat-value" style={{ fontSize: 24 }}>
             HI · PA · EN
           </div>
-          <small className="stat-note">Bilingual Devanagari / Gurmukhi + English</small>
+          <small className="stat-note">Hindi, Punjabi &amp; English</small>
         </article>
       </div>
 
-      <div className="section-head">
-        <div>
-          <div className="eyebrow">
-            <Webhook size={13} /> Sarvam AI Samvaad Call &amp; Transcript Ledger
-          </div>
-          <h2>
-            Tracked Calls, Chatbot Sessions &amp; Bilingual Transcripts ({filteredCalls.length})
-          </h2>
-          <p className="section-copy">
-            Every inbound call to <strong>{site.phoneDisplay}</strong> and web AI chatbot session
-            stores structured variables alongside its full turn-by-turn Sarvam{" "}
-            <code>interaction_transcript</code>.
-          </p>
+      <div className="filters" style={{ gridTemplateColumns: "2fr 1fr auto" }}>
+        <div className="search-field">
+          <Search size={16} />
+          <input
+            aria-label="Search calls and transcripts"
+            placeholder="Search by caller phone, student name, keyword or transcript text…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
-        <div className="flex flex-wrap gap-2 items-center">
-          <select
-            aria-label="Filter calls by channel"
-            className="border rounded px-3 py-2 text-xs bg-background"
-            value={channelFilter}
-            onChange={(e) =>
-              setChannelFilter(e.target.value as "all" | "sarvam_voice_call" | "rabata_web_chatbot")
-            }
-          >
-            <option value="all">All Channels ({calls.length})</option>
-            <option value="sarvam_voice_call">Phone Calls · {site.phoneDisplay}</option>
-            <option value="rabata_web_chatbot">Web AI Chatbot</option>
-          </select>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setShowIntegrationSpec((prev) => !prev)}
-          >
-            <FileCode2 size={14} />{" "}
-            {showIntegrationSpec ? "Hide Sarvam API / Prompt" : "Sarvam Webhook & Prompt"}
-          </Button>
-        </div>
+        <select
+          aria-label="Filter calls by channel"
+          value={channelFilter}
+          onChange={(e) =>
+            setChannelFilter(e.target.value as "all" | "sarvam_voice_call" | "rabata_web_chatbot")
+          }
+        >
+          <option value="all">All Channels ({allCalls.length})</option>
+          <option value="sarvam_voice_call">Phone Calls ({voiceCount})</option>
+          <option value="rabata_web_chatbot">Web AI Chatbot ({chatCount})</option>
+        </select>
+        <Button variant="outline" size="sm" onClick={() => void refreshFromServer()}>
+          <RefreshCw size={14} /> Refresh Live Calls
+        </Button>
       </div>
-
-      {showIntegrationSpec && (
-        <div className="form-panel space-y-4">
-          <div className="eyebrow">Sarvam AI Samvaad Integration Specification</div>
-          <h3>Webhook Signature Verification &amp; Analytics API</h3>
-          <div className="grid gap-2 text-xs text-muted-foreground">
-            <div>
-              <strong>Helpline Number:</strong> <code>{site.phone}</code> ({site.phoneDisplay})
-            </div>
-            <div>
-              <strong>Webhook Verification Headers:</strong> <code>Sarvam-Signature</code>{" "}
-              (HMAC-SHA256 of <code>{"{timestamp}.{raw_body}"}</code> with <code>whsec_*</code>) and{" "}
-              <code>Sarvam-Timestamp</code>
-            </div>
-            <div>
-              <strong>Transcript Analytics Endpoint:</strong>{" "}
-              <code>
-                GET https://apps.sarvam.ai/api/analytics/v1/{"{org_id}"}/{"{workspace_id}"}/
-                {"{app_id}"}/interactions?include_transcript=true
-              </code>{" "}
-              (header: <code>X-API-Key</code>)
-            </div>
-          </div>
-
-          <details className="border rounded-lg p-3 bg-muted text-xs">
-            <summary className="cursor-pointer font-semibold text-primary">
-              Inspect Shared Calling &amp; Chatbot System Prompt (Sarvam AI)
-            </summary>
-            <pre className="mt-3 whitespace-pre-wrap text-[11px] leading-relaxed">
-              {RABATA_SARVAM_SYSTEM_PROMPT}
-            </pre>
-          </details>
-
-          <div>
-            <label className="field">
-              Test Live Sarvam Samvaad Webhook JSON Ingestion (<code>interaction_transcript</code>)
-              <textarea
-                rows={8}
-                className="font-mono text-[11px]"
-                value={webhookJson}
-                onChange={(e) => setWebhookJson(e.target.value)}
-              />
-            </label>
-            <Button size="sm" className="mt-3" onClick={handleIngestWebhook}>
-              <Webhook size={14} /> Parse &amp; Log Webhook Call Transcript
-            </Button>
-          </div>
-        </div>
-      )}
 
       <div className="grid gap-4">
         {filteredCalls.map((call) => {
@@ -280,7 +483,7 @@ export function AdminSarvamCallTracker({
                     >
                       {call.channel === "sarvam_voice_call" ? (
                         <>
-                          <Phone size={11} /> Voice Call ({call.agent_phone_number})
+                          <Phone size={11} /> Phone Call ({call.agent_phone_number})
                         </>
                       ) : (
                         <>
@@ -331,12 +534,18 @@ export function AdminSarvamCallTracker({
                     size="sm"
                     variant="outline"
                     onClick={() => downloadTranscriptJson(call)}
-                    title="Download full Sarvam Samvaad JSON transcript"
+                    title="Download full Sarvam JSON transcript"
                   >
                     <Download size={14} /> JSON
                   </Button>
                   {vars.kind === "student" && call.status !== "enrolled" && (
-                    <Button size="sm" onClick={() => void onEnrollCall(call)}>
+                    <Button
+                      size="sm"
+                      onClick={async () => {
+                        await onEnrollCall(call);
+                        setLocalCalls(updateSarvamCallStatus(call.id, "enrolled"));
+                      }}
+                    >
                       <UserPlus size={14} /> Enroll Student
                     </Button>
                   )}
@@ -347,30 +556,36 @@ export function AdminSarvamCallTracker({
                 <div className="transcript-box">
                   <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
                     <span>
-                      <strong>Start:</strong>{" "}
+                      <strong>Started:</strong>{" "}
                       {new Date(call.start_datetime).toLocaleString("en-IN")} ·{" "}
-                      <strong>Model Stack:</strong> {call.llm_model}
+                      <strong>Stack:</strong> {call.llm_model}
                     </span>
                     <span>
-                      <strong>Guardian Consent:</strong> {vars.consent ? "Verified" : "Pending"}
+                      <strong>Consent:</strong> {vars.consent ? "Verified" : "Pending"}
                     </span>
                   </div>
-                  {call.interaction_transcript.map((turn) => (
-                    <div key={`${call.id}-${turn.turn_id}`} className="transcript-turn">
-                      <div className="flex items-center justify-between gap-2 mb-1">
+                  {call.interaction_transcript.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      No turn-by-turn turns included; summary: {vars.message}
+                    </p>
+                  ) : (
+                    call.interaction_transcript.map((turn) => (
+                      <div key={`${call.id}-${turn.turn_id}`} className="transcript-turn">
                         <strong
-                          className={turn.role === "agent" ? "text-primary" : "text-foreground"}
+                          className={`block mb-1 ${
+                            turn.role === "agent" ? "text-primary" : "text-foreground"
+                          }`}
                         >
                           Turn {turn.turn_id} ·{" "}
-                          {turn.role === "agent" ? "Rabata Sarvam AI" : "Caller / Visitor"}
+                          {turn.role === "agent" ? "Rabata AI Assistant" : "Caller / Visitor"}
                         </strong>
+                        {turn.indic_text && (
+                          <div className="text-foreground font-medium mb-1">{turn.indic_text}</div>
+                        )}
+                        <div className="text-muted-foreground">{turn.en_text}</div>
                       </div>
-                      {turn.indic_text && (
-                        <div className="text-foreground font-medium mb-1">{turn.indic_text}</div>
-                      )}
-                      <div className="text-muted-foreground">{turn.en_text}</div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               )}
             </article>

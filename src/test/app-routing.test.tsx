@@ -234,25 +234,44 @@ describe("Platform helpers", () => {
     expect(call.output_agent_variables.name).toBe("Diya");
     expect(call.interaction_transcript).toHaveLength(1);
 
-    let state = createInitialChatSession("en");
+    const state = createInitialChatSession("en");
     const emergency = generateRabataAgentReply("Someone is in danger", state, "en");
     expect(emergency.reply).toContain("112");
     expect(emergency.reply).toContain("1098");
 
-    for (const msg of [
-      "Register a student",
-      "Yes I am parent",
-      "Rohan",
-      "parent.rohan@example.com",
-      "6–8",
-      "English, Science",
-      "In person",
-    ]) {
-      state = generateRabataAgentReply(msg, state, "en").nextState;
-    }
-    const done = generateRabataAgentReply("Yes I consent", state, "en");
+    // General questions must NOT trap the user inside student registration
+    const infoAnswer = generateRabataAgentReply("What classes do you teach?", state, "en");
+    expect(infoAnswer.nextState.stage).toBe("idle");
+    expect(infoAnswer.reply).toContain("Classes 1–12");
+
+    // One-shot multi-entity extraction + mid-flow question + cancel resilience
+    const firstTurn = generateRabataAgentReply(
+      "Enroll my daughter Diya in Class 5 for English and Math, email parent.diya@example.com",
+      state,
+      "en",
+    );
+    expect(firstTurn.nextState.name).toBe("Diya");
+    expect(firstTurn.nextState.classLevel).toBe("4–5");
+    expect(firstTurn.nextState.email).toBe("parent.diya@example.com");
+    expect(firstTurn.nextState.stage).toBe("student_consent");
+
+    // Asking a question mid-flow answers cleanly without overwriting student's name
+    const midQuestion = generateRabataAgentReply("Are classes free?", firstTurn.nextState, "en");
+    expect(midQuestion.reply).toContain("100% free");
+    expect(midQuestion.nextState.name).toBe("Diya");
+
+    const done = generateRabataAgentReply("Yes, I consent", midQuestion.nextState, "en");
     expect(done.completedEnquiry?.kind).toBe("student");
-    expect(done.completedEnquiry?.name).toBe("Rohan");
-    expect(done.completedEnquiry?.email).toBe("parent.rohan@example.com");
+    expect(done.completedEnquiry?.name).toBe("Diya");
+    expect(done.completedEnquiry?.email).toBe("parent.diya@example.com");
+
+    // Cancel must clear any active draft cleanly
+    const started = generateRabataAgentReply(
+      "Register a student",
+      createInitialChatSession("en"),
+      "en",
+    );
+    const cancelled = generateRabataAgentReply("cancel", started.nextState, "en");
+    expect(cancelled.nextState.stage).toBe("idle");
   });
 });

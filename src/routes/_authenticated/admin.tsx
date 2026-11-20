@@ -79,8 +79,9 @@ const SECTION_META: Record<AdminSectionId, { title: string; subtitle: string }> 
     subtitle: "Manage mentor profiles, student assignments, and classroom attendance logs.",
   },
   access: {
-    title: "Access Control & Enquiries",
-    subtitle: "Review mentor/student account approvals and process private website enquiries.",
+    title: "Calls, Transcripts & Enquiries",
+    subtitle:
+      "Track Sarvam AI voice calls (+91 79654 81661), chatbot transcripts, enquiries, and role approvals.",
   },
   lectures: {
     title: "Recorded Lectures Studio",
@@ -454,7 +455,7 @@ function Admin() {
     {
       group: "Operations",
       id: "access",
-      label: "Access & Enquiries",
+      label: "Calls & Enquiries",
       icon: UserCheck,
       badge: pendingCount + d.enquiries.length,
     },

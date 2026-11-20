@@ -1,9 +1,10 @@
+import type { AdminEnquiryItem } from "./enquiries.functions";
 import type { AppLanguage } from "./i18n";
 import { makeLocalId } from "./local-store";
 import { site } from "./site";
 
 export const RABATA_SARVAM_FIRST_MESSAGE =
-  "Namaste! Welcome to Rabata — Connecting Education with Opportunity. I’m Rabata’s virtual assistant. Are you here to register a student for free classes, volunteer as a mentor, or support our community initiatives?";
+  "Namaste! Welcome to Rabata — Connecting Education with Opportunity. I’m Rabata’s virtual assistant. Ask me about our free classes, or tell me if you’d like to register a student, volunteer as a mentor, or support our initiatives.";
 
 export const RABATA_SARVAM_SYSTEM_PROMPT = `# Role & Identity
 You are the official Voice & Chat AI Assistant for Rabata (राबता), a community-led education, mentorship, and skills initiative founded by educator Tammana Rathore in Derabassi, Punjab, India.
@@ -32,33 +33,21 @@ Your tagline and mission: "Learn. Empower. Rise. Connecting education with oppor
 # Call & Chat Handling Flows
 ## Flow 1: Parent, Guardian, or Learner Enquiring About Classes (Student Registration)
 1. Safeguarding Check: If under 18, confirm you are speaking with a parent or legal guardian (adult learners 18+ may register themselves).
-2. Collect One by One:
-   - Student's first name (first name only)
-   - Parent / guardian email (and callback phone if over phone)
-   - Class / grade level (1–3, 4–5, 6–8, 9–10, 11–12, or Young adult)
-   - Subjects or skills needed
-   - Preferred language (Hindi, English, Punjabi, or Hindi and English)
-   - Preferred format (In person, Online, or Either)
-   - Learning goals / support needed
-   - Explicit consent to store details for follow-up
+2. Collect: Student's first name (first name only), parent/guardian email, class/grade level (1–3, 4–5, 6–8, 9–10, 11–12, or Young adult), subjects/skills needed, preferred language, preferred format (In person, Online, or Either), and explicit consent.
 
 ## Flow 2: Volunteer Teacher or Mentor Enquiry
 1. Confirm 18+ eligibility and note that volunteer applications are reviewed before teaching begins.
 2. Collect full name, email, qualifications, subjects/classes, languages, availability, experience, motivation, and consent.
 
 ## Flow 3: Donations, Learning Materials, Food Drives, or Partnerships
-1. Explain support options (books, notebooks, digital equipment, food drives, career workshops).
-2. Highlight Open Fund Transparency (/funds) showing received totals, allocations, expenditures, and receipt/bill proofs.
-3. Never ask for credit card numbers, UPI PINs, or bank credentials. Collect supporter name, email, and contribution idea.
+1. Explain support options (books, notebooks, digital equipment, food drives, career workshops) and Open Fund Transparency (/funds).
+2. Never ask for credit card numbers, UPI PINs, or bank credentials. Collect supporter name, email, and contribution idea.
 
 # Strict Child Safeguarding, Privacy & Safety Rules
 1. Never collect Aadhaar numbers, government IDs, a child's personal mobile number, home address, or financial credentials.
 2. Never share private details of any Rabata student or mentor.
 3. Never invent unverified statistics or job placement guarantees (Rabata supports ~10–15 children with direct individual attention).
-4. Emergency Protocol: If someone reports a child in immediate danger in India, immediately direct them to dial 112 (Emergency) or 1098 (Childline India).
-
-# End-of-Call Summary Output (Matched to enquirySchema)
-Output structured variables: kind ("student" | "volunteer" | "contact"), name, email, phone, classLevel, subjects, language, format, qualifications, experience, availability, message, consent.`;
+4. Emergency Protocol: If someone reports a child in immediate danger in India, immediately direct them to dial 112 (Emergency) or 1098 (Childline India).`;
 
 export interface SarvamTranscriptTurn {
   turn_id: number;
@@ -117,7 +106,7 @@ export const SEEDED_SARVAM_CALLS: SarvamCallRecord[] = [
     detected_language: "hi-IN",
     stt_model: "Saaras v2",
     tts_model: "Bulbul v1 (Meera)",
-    llm_model: "Sarvam-M",
+    llm_model: "Sarvam AI Samvaad",
     start_datetime: "2026-11-20T10:14:00+05:30",
     end_datetime: "2026-11-20T10:15:35+05:30",
     output_agent_variables: {
@@ -179,7 +168,7 @@ export const SEEDED_SARVAM_CALLS: SarvamCallRecord[] = [
     detected_language: "pa-IN",
     stt_model: "Saaras v2",
     tts_model: "Bulbul v1 (Simran)",
-    llm_model: "Sarvam-M",
+    llm_model: "Sarvam AI Samvaad",
     start_datetime: "2026-11-20T12:40:00+05:30",
     end_datetime: "2026-11-20T12:41:18+05:30",
     output_agent_variables: {
@@ -238,7 +227,7 @@ export const SEEDED_SARVAM_CALLS: SarvamCallRecord[] = [
     detected_language: "en-IN",
     stt_model: "Saaras v2",
     tts_model: "Bulbul v1 (Ananya)",
-    llm_model: "Sarvam-M",
+    llm_model: "Sarvam AI Samvaad",
     start_datetime: "2026-11-20T16:05:00+05:30",
     end_datetime: "2026-11-20T16:06:04+05:30",
     output_agent_variables: {
@@ -296,7 +285,7 @@ export function readSarvamCalls(): SarvamCallRecord[] {
       return parsed as SarvamCallRecord[];
     }
   } catch {
-    // fallback to seed
+    // ignore storage errors
   }
   return SEEDED_SARVAM_CALLS;
 }
@@ -304,14 +293,16 @@ export function readSarvamCalls(): SarvamCallRecord[] {
 export function writeSarvamCalls(calls: SarvamCallRecord[]): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(SARVAM_CALLS_STORAGE_KEY, JSON.stringify(calls.slice(0, 60)));
+    window.localStorage.setItem(SARVAM_CALLS_STORAGE_KEY, JSON.stringify(calls.slice(0, 80)));
   } catch {
-    // ignore quota issues
+    // ignore storage quota errors
   }
 }
 
 export function prependSarvamCall(call: SarvamCallRecord): SarvamCallRecord[] {
-  const existing = readSarvamCalls().filter((c) => c.id !== call.id);
+  const existing = readSarvamCalls().filter(
+    (c) => c.id !== call.id && c.interaction_id !== call.interaction_id,
+  );
   const next = [call, ...existing];
   writeSarvamCalls(next);
   return next;
@@ -326,34 +317,57 @@ export function updateSarvamCallStatus(
   return next;
 }
 
-export function parseSarvamWebhookPayload(rawJson: string): SarvamCallRecord {
-  const obj = JSON.parse(rawJson) as Record<string, unknown>;
-  const varsRaw =
+export function normalizeSarvamWebhookObject(obj: Record<string, unknown>): SarvamCallRecord {
+  const varsRaw = (
     obj["output_agent_variables"] &&
     typeof obj["output_agent_variables"] === "object" &&
     !Array.isArray(obj["output_agent_variables"])
       ? (obj["output_agent_variables"] as Record<string, unknown>)
-      : {};
+      : obj["extracted_variables"] &&
+          typeof obj["extracted_variables"] === "object" &&
+          !Array.isArray(obj["extracted_variables"])
+        ? (obj["extracted_variables"] as Record<string, unknown>)
+        : {}
+  ) as Record<string, unknown>;
 
-  const rawTranscript = Array.isArray(obj["interaction_transcript"])
-    ? (obj["interaction_transcript"] as Array<Record<string, unknown>>)
-    : [];
+  const rawTranscriptSource = Array.isArray(obj["interaction_transcript"])
+    ? obj["interaction_transcript"]
+    : Array.isArray(obj["transcript"])
+      ? obj["transcript"]
+      : Array.isArray(obj["messages"])
+        ? obj["messages"]
+        : [];
 
-  const transcript: SarvamTranscriptTurn[] = rawTranscript.map((turn, idx) => {
-    const t: SarvamTranscriptTurn = {
+  const transcript: SarvamTranscriptTurn[] = (rawTranscriptSource as unknown[]).map((item, idx) => {
+    if (typeof item === "string") {
+      return { turn_id: idx + 1, role: idx % 2 === 0 ? "agent" : "user", en_text: item };
+    }
+    const turn = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
+    const roleRaw = String(turn["role"] ?? turn["speaker"] ?? "").toLowerCase();
+    const role: "agent" | "user" =
+      roleRaw === "user" || roleRaw === "caller" || roleRaw === "customer" ? "user" : "agent";
+    const enText = String(
+      turn["en_text"] ?? turn["text"] ?? turn["content"] ?? turn["indic_text"] ?? "",
+    );
+    const out: SarvamTranscriptTurn = {
       turn_id: typeof turn["turn_id"] === "number" ? turn["turn_id"] : idx + 1,
-      role: turn["role"] === "user" ? "user" : "agent",
-      en_text: String(turn["en_text"] ?? turn["indic_text"] ?? ""),
+      role,
+      en_text: enText,
     };
     if (typeof turn["indic_text"] === "string" && turn["indic_text"].trim()) {
-      t.indic_text = turn["indic_text"];
+      out.indic_text = turn["indic_text"];
     }
-    return t;
+    return out;
   });
 
-  const rawKind = String(varsRaw["kind"] ?? "student");
-  const kind: SarvamOutputVariables["kind"] =
-    rawKind === "volunteer" ? "volunteer" : rawKind === "contact" ? "contact" : "student";
+  const intentOrKind = String(
+    varsRaw["kind"] ?? varsRaw["customer_intent"] ?? obj["intent"] ?? "student",
+  ).toLowerCase();
+  const kind: SarvamOutputVariables["kind"] = intentOrKind.includes("volunteer")
+    ? "volunteer"
+    : intentOrKind.includes("contact") || intentOrKind.includes("donat")
+      ? "contact"
+      : "student";
 
   const langHint = JSON.stringify(transcript);
   const detectedLanguage: SarvamCallRecord["detected_language"] = /[\u0900-\u097F]/.test(langHint)
@@ -368,12 +382,24 @@ export function parseSarvamWebhookPayload(rawJson: string): SarvamCallRecord {
     .map((t) => t.en_text)
     .join(" | ");
 
+  const callerPhone = String(
+    obj["user_phone_number"] ?? obj["from"] ?? obj["caller_number"] ?? "+9198XXXXXXXX",
+  );
+  const digits = callerPhone.replace(/\D/g, "") || "caller";
+  const rawEmail = String(varsRaw["email"] ?? "");
+  const safeEmail = rawEmail.includes("@") ? rawEmail : `call.${digits}@voice.rabata.local`;
+
   const outputVars: SarvamOutputVariables = {
     kind,
-    name: String(varsRaw["name"] ?? varsRaw["student_name"] ?? "Caller"),
-    email: String(varsRaw["email"] ?? "voice.caller@example.com"),
+    name: String(
+      varsRaw["name"] ??
+        varsRaw["student_name"] ??
+        varsRaw["caller_name"] ??
+        `Caller (${callerPhone})`,
+    ).slice(0, 100),
+    email: safeEmail.slice(0, 255),
     classLevel: String(varsRaw["classLevel"] ?? varsRaw["class_level"] ?? "6–8"),
-    subjects: String(varsRaw["subjects"] ?? "English, Mathematics"),
+    subjects: String(varsRaw["subjects"] ?? "General Support"),
     language: String(
       varsRaw["language"] ??
         (detectedLanguage === "hi-IN"
@@ -385,8 +411,9 @@ export function parseSarvamWebhookPayload(rawJson: string): SarvamCallRecord {
     format: String(varsRaw["format"] ?? "In person"),
     message: String(
       varsRaw["message"] ??
-        (transcriptSummary || "Inbound Sarvam AI Samvaad voice call logged via webhook."),
-    ),
+        varsRaw["summary"] ??
+        (transcriptSummary || `Inbound Sarvam AI Samvaad call to ${site.phoneDisplay}.`),
+    ).slice(0, 2000),
     consent: varsRaw["consent"] !== false,
     resolved_intent: String(varsRaw["resolved_intent"] ?? varsRaw["customer_intent"] ?? kind),
   };
@@ -395,56 +422,117 @@ export function parseSarvamWebhookPayload(rawJson: string): SarvamCallRecord {
     id: makeLocalId("srv"),
     interaction_id: String(
       obj["interaction_id"] ??
-        `${new Date().toISOString().slice(0, 10).replace(/-/g, "")}/samvaad-${Date.now()}`,
+        obj["call_id"] ??
+        `${nowIso.slice(0, 10).replace(/-/g, "")}/samvaad-${Date.now()}`,
     ),
     app_id: String(obj["app_id"] ?? "rabata-samvaad-helpline"),
     deployment_id: String(obj["deployment_id"] ?? "rabata-voice-prod-v3"),
-    channel: "sarvam_voice_call",
-    user_phone_number: String(obj["user_phone_number"] ?? "+9198XXXXXXXX"),
-    agent_phone_number: String(obj["agent_phone_number"] ?? site.phone),
-    duration: Number(obj["duration"] ?? Math.max(25, transcript.length * 16)),
+    channel: obj["channel"] === "rabata_web_chatbot" ? "rabata_web_chatbot" : "sarvam_voice_call",
+    user_phone_number: callerPhone,
+    agent_phone_number: String(obj["agent_phone_number"] ?? obj["to"] ?? site.phone),
+    duration: Number(
+      obj["duration"] ?? obj["duration_seconds"] ?? Math.max(25, transcript.length * 16),
+    ),
     status:
       obj["status"] === "missed"
         ? "missed"
         : obj["status"] === "connected"
           ? "connected"
-          : "completed",
+          : obj["status"] === "enrolled"
+            ? "enrolled"
+            : "completed",
     detected_language: detectedLanguage,
     stt_model: "Saaras v2",
     tts_model: "Bulbul v1",
-    llm_model: "Sarvam-M",
-    start_datetime: String(obj["start_datetime"] ?? nowIso),
-    end_datetime: String(obj["end_datetime"] ?? nowIso),
+    llm_model: String(obj["llm_model"] ?? "Sarvam AI Samvaad"),
+    start_datetime: String(obj["start_datetime"] ?? obj["started_at"] ?? nowIso),
+    end_datetime: String(obj["end_datetime"] ?? obj["ended_at"] ?? nowIso),
     output_agent_variables: outputVars,
     interaction_transcript: transcript,
   };
 }
 
+export function parseSarvamWebhookPayload(rawJson: string): SarvamCallRecord {
+  const obj = JSON.parse(rawJson) as Record<string, unknown>;
+  return normalizeSarvamWebhookObject(obj);
+}
+
+export function convertEnquiriesToSarvamCalls(enquiries: AdminEnquiryItem[]): SarvamCallRecord[] {
+  const results: SarvamCallRecord[] = [];
+  for (const enq of enquiries) {
+    const d = enq.details;
+    const channelRaw = String(d["channel"] ?? "");
+    const hasTranscript = Boolean(d["interaction_transcript"] || d["interaction_id"]);
+    if (!channelRaw && !hasTranscript) continue;
+
+    let parsedTranscript: SarvamTranscriptTurn[] = [];
+    if (typeof d["interaction_transcript"] === "string") {
+      try {
+        const arr = JSON.parse(d["interaction_transcript"]);
+        if (Array.isArray(arr)) parsedTranscript = arr as SarvamTranscriptTurn[];
+      } catch {
+        // ignore parse failure
+      }
+    }
+    if (parsedTranscript.length === 0 && d["message"]) {
+      parsedTranscript = [{ turn_id: 1, role: "user", en_text: d["message"] }];
+    }
+
+    const langLabel = String(d["language"] ?? "");
+    const detectedLanguage: SarvamCallRecord["detected_language"] = langLabel.includes("Hindi")
+      ? "hi-IN"
+      : langLabel.includes("Punjabi")
+        ? "pa-IN"
+        : "en-IN";
+
+    results.push({
+      id: enq.id,
+      interaction_id: d["interaction_id"] || `db-${enq.id.slice(0, 8)}`,
+      app_id: d["app_id"] || "rabata-samvaad-helpline",
+      deployment_id: d["deployment_id"] || "rabata-voice-prod-v3",
+      channel: channelRaw.toLowerCase().includes("chat")
+        ? "rabata_web_chatbot"
+        : "sarvam_voice_call",
+      user_phone_number: d["caller"] || enq.email,
+      agent_phone_number: site.phone,
+      duration: Number(d["duration"] || 60),
+      status: "completed",
+      detected_language: detectedLanguage,
+      stt_model: "Saaras v2",
+      tts_model: "Bulbul v1",
+      llm_model: "Sarvam AI",
+      start_datetime: enq.created_at,
+      end_datetime: enq.created_at,
+      output_agent_variables: {
+        kind: enq.kind,
+        name: enq.name,
+        email: enq.email,
+        ...(d["classLevel"] ? { classLevel: d["classLevel"] } : {}),
+        ...(d["subjects"] ? { subjects: d["subjects"] } : {}),
+        ...(d["language"] ? { language: d["language"] } : {}),
+        ...(d["format"] ? { format: d["format"] } : {}),
+        message: d["message"] || "",
+        consent: enq.consent,
+        resolved_intent: enq.kind,
+      },
+      interaction_transcript: parsedTranscript,
+    });
+  }
+  return results;
+}
+
 export type ChatFlowStage =
   | "idle"
-  | "student_guardian_check"
-  | "student_name"
-  | "student_email"
-  | "student_class"
-  | "student_subjects"
-  | "student_language"
-  | "student_format"
+  | "student_collect"
   | "student_consent"
-  | "volunteer_age_check"
-  | "volunteer_name"
-  | "volunteer_email"
-  | "volunteer_qualifications"
-  | "volunteer_subjects"
-  | "volunteer_availability"
+  | "volunteer_collect"
   | "volunteer_consent"
-  | "contact_name"
-  | "contact_email"
-  | "contact_message"
-  | "contact_consent";
+  | "contact_collect";
 
 export interface ChatSessionState {
   stage: ChatFlowStage;
   kind: "student" | "volunteer" | "contact";
+  guardianConfirmed: boolean;
   name: string;
   email: string;
   classLevel: string;
@@ -461,12 +549,13 @@ export function createInitialChatSession(lang: AppLanguage): ChatSessionState {
   return {
     stage: "idle",
     kind: "student",
+    guardianConfirmed: false,
     name: "",
     email: "",
-    classLevel: "6–8",
-    subjects: "Spoken English, Mathematics",
-    language: lang === "hi" ? "Hindi" : lang === "pa" ? "Punjabi" : "Hindi and English",
-    format: "In person",
+    classLevel: "",
+    subjects: "",
+    language: lang === "hi" ? "Hindi" : lang === "pa" ? "Punjabi" : "",
+    format: "",
     qualifications: "",
     availability: "",
     message: "",
@@ -476,16 +565,302 @@ export function createInitialChatSession(lang: AppLanguage): ChatSessionState {
 
 export function getWelcomeMessageForLanguage(lang: AppLanguage): string {
   if (lang === "hi") {
-    return "नमस्ते! राबता AI सहायक में आपका स्वागत है। क्या आप निःशुल्क कक्षाओं के लिए छात्र पंजीकरण करना चाहते हैं, शिक्षक/मेंटर के रूप में जुड़ना चाहते हैं, या हमारी पारदर्शी फंड व्यवस्था के बारे में जानना चाहते हैं? (कॉल के लिए: +91 79654 81661)";
+    return `नमस्ते! राबता AI सहायक में आपका स्वागत है। आप हमारी निःशुल्क कक्षाओं, विषयों, रिकॉर्डेड लेक्चर या फंड पारदर्शिता के बारे में कोई भी प्रश्न पूछ सकते हैं — या छात्र पंजीकरण व स्वयंसेवा शुरू कर सकते हैं। (हेल्पलाइन: ${site.phoneDisplay})`;
   }
   if (lang === "pa") {
-    return "ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ! ਰਾਬਤਾ AI ਸਹਾਇਕ ਵਿੱਚ ਤੁਹਾਡਾ ਸਵਾਗਤ ਹੈ। ਕੀ ਤੁਸੀਂ ਮੁਫ਼ਤ ਜਮਾਤਾਂ ਲਈ ਵਿਦਿਆਰਥੀ ਰਜਿਸਟਰ ਕਰਨਾ ਚਾਹੁੰਦੇ ਹੋ, ਵਲੰਟੀਅਰ ਅਧਿਆਪਕ ਬਣਨਾ ਚਾਹੁੰਦੇ ਹੋ, ਜਾਂ ਫੰਡ ਪਾਰਦਰਸ਼ਤਾ ਬਾਰੇ ਪੁੱਛਣਾ ਚਾਹੁੰਦੇ ਹੋ? (ਫ਼ੋਨ ਹੈਲਪਲਾਈਨ: +91 79654 81661)";
+    return `ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ! ਰਾਬਤਾ AI ਸਹਾਇਕ ਵਿੱਚ ਤੁਹਾਡਾ ਸਵਾਗਤ ਹੈ। ਤੁਸੀਂ ਸਾਡੀਆਂ ਮੁਫ਼ਤ ਜਮਾਤਾਂ, ਵਿਸ਼ਿਆਂ ਜਾਂ ਫੰਡ ਪਾਰਦਰਸ਼ਤਾ ਬਾਰੇ ਕੁਝ ਵੀ ਪੁੱਛ ਸਕਦੇ ਹੋ — ਜਾਂ ਵਿਦਿਆਰਥੀ ਰਜਿਸਟ੍ਰੇਸ਼ਨ ਸ਼ੁਰੂ ਕਰ ਸਕਦੇ ਹੋ। (ਹੈਲਪਲਾਈਨ: ${site.phoneDisplay})`;
   }
   return RABATA_SARVAM_FIRST_MESSAGE;
 }
 
 function localizedReply(lang: AppLanguage, en: string, hi: string, pa: string): string {
   return lang === "hi" ? hi : lang === "pa" ? pa : en;
+}
+
+function answerKnowledgeQuestion(lower: string, lang: AppLanguage): string | null {
+  if (/(fee|cost|charge|free|paisa|pay|kitne|मुफ़्त|निःशुल्क|फीस|ਮੁਫ਼ਤ|ਫੀਸ)/.test(lower)) {
+    return localizedReply(
+      lang,
+      "All Rabata education, mentorship, spoken English, computer classes, recorded lectures, and community meals are 100% free of cost. No family is ever charged.",
+      "राबता की सभी कक्षाएं, अंग्रेज़ी व कंप्यूटर शिक्षा, रिकॉर्डेड लेक्चर और सामुदायिक भोजन 100% निःशुल्क हैं।",
+      "ਰਾਬਤਾ ਦੀਆਂ ਸਾਰੀਆਂ ਜਮਾਤਾਂ, ਅੰਗਰੇਜ਼ੀ ਤੇ ਕੰਪਿਊਟਰ ਸਿਖਲਾਈ ਅਤੇ ਭੋਜਨ ਸੇਵਾ 100% ਮੁਫ਼ਤ ਹੈ।",
+    );
+  }
+
+  if (/(who founded|tammana|founder|about rabata|about you|tamanna|किसने|तमन्ना|ਤਮੰਨਾ)/.test(lower)) {
+    return localizedReply(
+      lang,
+      `Rabata (राबता) was founded by educator Tammana Rathore in Derabassi, Punjab. We currently guide 10–15 children with direct, individualized mentorship connecting classroom basics, spoken English, computer skills, and career readiness. Follow @rabata._.official or @rathore._.tammana.`,
+      `राबता की स्थापना शिक्षिका तमन्ना राठौर ने डेराबस्सी, पंजाब में की। यहाँ लगभग 10–15 बच्चों को व्यक्तिगत मार्गदर्शन, अंग्रेज़ी, कंप्यूटर और करियर कौशल सिखाए जाते हैं।`,
+      `ਰਾਬਤਾ ਦੀ ਸ਼ੁਰੂਆਤ ਅਧਿਆਪਕਾ ਤਮੰਨਾ ਰਾਠੌਰ ਨੇ ਡੇਰਾਬੱਸੀ, ਪੰਜਾਬ ਵਿੱਚ ਕੀਤੀ। ਅਸੀਂ 10–15 ਬੱਚਿਆਂ ਨੂੰ ਵਿਅਕਤੀਗਤ ਸਿੱਖਿਆ ਅਤੇ ਕਰੀਅਰ ਮਾਰਗਦਰਸ਼ਨ ਦਿੰਦੇ ਹਾਂ।`,
+    );
+  }
+
+  if (
+    /(where|location|address|derabassi|visit|centre|center|place|timing|time|schedule|कहाँ|पता|समय|ਕਿੱਥੇ|ਸਮਾਂ)/.test(
+      lower,
+    )
+  ) {
+    return localizedReply(
+      lang,
+      `Rabata operates in Derabassi, Punjab (founder's residential learning space) as well as Online. For child safety we don't publish a street address publicly; Tammana coordinates schedules & visits personally after enquiry review. Call our AI helpline anytime at ${site.phoneDisplay}.`,
+      `राबता डेराबस्सी, पंजाब में व्यक्तिगत केंद्र व ऑनलाइन दोनों माध्यमों से पढ़ाता है। बाल सुरक्षा के कारण सटीक घर का पता ऑनलाइन नहीं दिया जाता—पंजीकरण के बाद तमन्ना स्वयं समय तय करती हैं। हेल्पलाइन: ${site.phoneDisplay}`,
+      `ਰਾਬਤਾ ਡੇਰਾਬੱਸੀ, ਪੰਜਾਬ ਅਤੇ ਆਨਲਾਈਨ ਦੋਵਾਂ ਤਰੀਕਿਆਂ ਨਾਲ ਪੜ੍ਹਾਉਂਦਾ ਹੈ। ਬਾਲ ਸੁਰੱਖਿਆ ਕਾਰਨ ਰਜਿਸਟ੍ਰੇਸ਼ਨ ਤੋਂ ਬਾਅਦ ਤਮੰਨਾ ਸਮਾਂ ਤੈਅ ਕਰਦੇ ਹਨ। ਹੈਲਪਲਾਈਨ: ${site.phoneDisplay}`,
+    );
+  }
+
+  if (
+    /(what classes|which classes|subjects|teach|curriculum|syllabus|course|program|offer|lecture|quiz|क्या पढ़ा|विषय|कक्षा|ਵਿਸ਼ੇ|ਜਮਾਤਾਂ)/.test(
+      lower,
+    )
+  ) {
+    return localizedReply(
+      lang,
+      `We support Classes 1–12 & Young Adults across Spoken English, Science, Mathematics, Digital Literacy, and Interview/Career Prep. Students can also watch free recorded lectures with interactive 3-question quizzes anytime on our Learn page (/learn).`,
+      `हम कक्षा 1–12 व युवा शिक्षार्थियों को स्पोकन अंग्रेज़ी, विज्ञान, गणित, कंप्यूटर और इंटरव्यू तैयारी पढ़ाते हैं। विद्यार्थी हमारे Learn पेज (/learn) पर रिकॉर्डेड लेक्चर व क्विज़ भी देख सकते हैं।`,
+      `ਅਸੀਂ ਜਮਾਤ 1–12 ਅਤੇ ਨੌਜਵਾਨਾਂ ਨੂੰ ਸਪੋਕਨ ਅੰਗਰੇਜ਼ੀ, ਵਿਗਿਆਨ, ਗਣਿਤ, ਕੰਪਿਊਟਰ ਅਤੇ ਇੰਟਰਵਿਊ ਤਿਆਰੀ ਕਰਵਾਉਂਦੇ ਹਾਂ। ਤੁਸੀਂ /learn ਪੇਜ ਤੇ ਰਿਕਾਰਡਡ ਲੈਕਚਰ ਤੇ ਕੁਇਜ਼ ਵੀ ਦੇਖ ਸਕਦੇ ਹੋ।`,
+    );
+  }
+
+  if (
+    /(fund|donat|money|receipt|audit|csv|transparent|book|food|meal|फंड|दान|रसीद|ਫੰਡ|ਦਾਨ)/.test(lower)
+  ) {
+    return localizedReply(
+      lang,
+      `Every donation and expense is tracked in our Open Fund Transparency Ledger (/funds) with category totals, bill/receipt proofs, and a 1-click Audit CSV download. You can support with books, notebooks, food drives, or educational sponsorships via ${site.email} (never share card/UPI PINs here).`,
+      `हर योगदान और खर्च हमारे फंड पारदर्शिता पेज (/funds) पर बिल-रसीद प्रमाण और CSV डाउनलोड के साथ दिखता है। किताबों या भोजन सेवा में मदद हेतु ${site.email} पर लिखें।`,
+      `ਹਰ ਦਾਨ ਅਤੇ ਖਰਚ ਦੀ ਜਾਣਕਾਰੀ ਰਸੀਦਾਂ ਤੇ CSV ਡਾਊਨਲੋਡ ਸਮੇਤ /funds ਪੇਜ ਤੇ ਉਪਲਬਧ ਹੈ। ਮਦਦ ਲਈ ${site.email} ਤੇ ਸੰਪਰਕ ਕਰੋ।`,
+    );
+  }
+
+  if (
+    /(report|progress|marks|attendance|qr|student profile|dashboard|प्रोफ़ाइल|रिपोर्ट|ਪ੍ਰੋਫਾਈਲ)/.test(
+      lower,
+    )
+  ) {
+    return localizedReply(
+      lang,
+      `Each enrolled learner gets an individualized Academic Profile (/students) with subject marks, monthly SVG growth graphs, attendance calendars, holistic skill dimensions, and QR-verified printable PDF progress reports.`,
+      `प्रत्येक नामांकित छात्र का व्यक्तिगत शैक्षणिक प्रोफ़ाइल (/students) बनता है जिसमें विषय अंक, मासिक प्रगति ग्राफ, उपस्थिति कैलेंडर और QR-सत्यापित PDF रिपोर्ट कार्ड शामिल हैं।`,
+      `ਹਰ ਵਿਦਿਆਰਥੀ ਦਾ ਵਿਦਿਅਕ ਪ੍ਰੋਫ਼ਾਈਲ (/students) ਬਣਦਾ ਹੈ ਜਿਸ ਵਿੱਚ ਵਿਸ਼ੇ ਦੇ ਅੰਕ, ਹਾਜ਼ਰੀ ਕੈਲੰਡਰ ਅਤੇ QR-ਤਸਦੀਕਸ਼ੁਦਾ PDF ਰਿਪੋਰਟ ਸ਼ਾਮਲ ਹੈ।`,
+    );
+  }
+
+  if (
+    /(phone|call|helpline|sarvam|voice|contact|email|instagram|फ़ोन|नंबर|हेल्पलाइन|ਫ਼ੋਨ|ਹੈਲਪਲਾਈਨ)/.test(
+      lower,
+    )
+  ) {
+    return localizedReply(
+      lang,
+      `Call our 24x7 Multilingual Sarvam AI Voice Helpline anytime at ${site.phoneDisplay} (Hindi, Punjabi, English), email ${site.email}, or follow @rabata._.official on Instagram.`,
+      `हमारी 24x7 बहुभाषी Sarvam AI हेल्पलाइन ${site.phoneDisplay} पर कभी भी कॉल करें, या ${site.email} पर ईमेल करें।`,
+      `ਸਾਡੀ 24x7 Sarvam AI ਹੈਲਪਲਾਈਨ ${site.phoneDisplay} ਤੇ ਕਦੇ ਵੀ ਕਾਲ ਕਰੋ, ਜਾਂ ${site.email} ਤੇ ਈਮੇਲ ਕਰੋ।`,
+    );
+  }
+
+  if (
+    /(hello|hi|hey|namaste|sat sri akal|thank|thanks|ok|good|नमस्ते|धन्यवाद|ਸ਼ੁਕਰੀਆ)/.test(lower) &&
+    lower.length < 35
+  ) {
+    return localizedReply(
+      lang,
+      `Namaste! How can I help you today? You can ask me anything about Rabata's free programs, call ${site.phoneDisplay}, or say "register a student" / "I want to volunteer".`,
+      `नमस्ते! मैं आपकी कैसे मदद कर सकता हूँ? आप राबता के कार्यक्रमों के बारे में पूछ सकते हैं या "छात्र पंजीकरण" / "स्वयंसेवक" कहकर शुरुआत कर सकते हैं।`,
+      `ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ! ਦੱਸੋ ਮੈਂ ਕਿਵੇਂ ਮਦਦ ਕਰ ਸਕਦਾ ਹਾਂ? ਤੁਸੀਂ ਸਾਡੇ ਕੋਰਸਾਂ ਬਾਰੇ ਪੁੱਛ ਸਕਦੇ ਹੋ ਜਾਂ "ਵਿਦਿਆਰਥੀ ਰਜਿਸਟ੍ਰੇਸ਼ਨ" ਕਹਿ ਕੇ ਸ਼ੁਰੂ ਕਰ ਸਕਦੇ ਹੋ।`,
+    );
+  }
+
+  return null;
+}
+
+function extractEntities(text: string): Partial<ChatSessionState> {
+  const found: Partial<ChatSessionState> = {};
+
+  const emailMatch = text.match(/[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+/);
+  if (emailMatch) found.email = emailMatch[0].toLowerCase();
+
+  const classMatch = text.match(/\b(1[0-2]|[1-9])(?:st|nd|rd|th)?\b|young\s*adult|कक्षा\s*(\d+)/i);
+  if (classMatch) {
+    const rawNum = Number(classMatch[1] ?? classMatch[2] ?? 0);
+    if (classMatch[0].toLowerCase().includes("young")) found.classLevel = "Young adult";
+    else if (rawNum >= 1 && rawNum <= 3) found.classLevel = "1–3";
+    else if (rawNum <= 5) found.classLevel = "4–5";
+    else if (rawNum <= 8) found.classLevel = "6–8";
+    else if (rawNum <= 10) found.classLevel = "9–10";
+    else if (rawNum <= 12) found.classLevel = "11–12";
+  }
+
+  const subjectsFound: string[] = [];
+  if (/english|अंग्रेज़ी|ਅੰਗਰੇਜ਼ੀ/i.test(text)) subjectsFound.push("English");
+  if (/math|maths|mathematics|गणित|ਗਣਿਤ/i.test(text)) subjectsFound.push("Mathematics");
+  if (/science|विज्ञान|ਵਿਗਿਆਨ/i.test(text)) subjectsFound.push("Science");
+  if (/computer|digital|कंप्यूटर|ਕੰਪਿਊਟਰ/i.test(text)) subjectsFound.push("Digital Literacy");
+  if (/interview|career|spoken/i.test(text)) subjectsFound.push("Career Readiness");
+  if (subjectsFound.length > 0) found.subjects = subjectsFound.join(", ");
+
+  if (/hindi|हिंदी/i.test(text) && /english/i.test(text)) found.language = "Hindi and English";
+  else if (/hindi|हिंदी/i.test(text)) found.language = "Hindi";
+  else if (/punjabi|ਪੰਜਾਬੀ/i.test(text)) found.language = "Punjabi";
+  else if (/english/i.test(text)) found.language = "English";
+
+  if (/online|ऑनलाइन|ਆਨਲਾਈਨ/i.test(text)) found.format = "Online";
+  else if (/either|both|दोनों|ਦੋਵੇਂ/i.test(text)) found.format = "Either";
+  else if (/in\s*person|offline|derabassi|डेराबस्सी|ऑफलाइन/i.test(text)) found.format = "In person";
+
+  const nameMatch = text.match(
+    /(?:my name is|i am|i'm|student name(?: is)?|child(?:'s)? name(?: is)?|son|daughter|name is|मेरा नाम|बच्चे का नाम)\s+([A-Za-z]{2,24})/i,
+  );
+  if (nameMatch?.[1]) {
+    found.name = nameMatch[1].charAt(0).toUpperCase() + nameMatch[1].slice(1);
+  }
+
+  if (
+    /\b(parent|guardian|mother|father|mom|dad|18\+|adult|माता|पिता|अभिभावक|ਮਾਤਾ|ਪਿਤਾ)\b/i.test(text)
+  ) {
+    found.guardianConfirmed = true;
+  }
+
+  return found;
+}
+
+function getNextMissingPrompt(
+  s: ChatSessionState,
+  lang: AppLanguage,
+): { prompt: string; stage: ChatFlowStage } {
+  if (s.kind === "volunteer") {
+    if (!s.name) {
+      return {
+        stage: "volunteer_collect",
+        prompt: localizedReply(
+          lang,
+          "What is your full name? (And please confirm you are 18+)",
+          "आपका पूरा नाम क्या है? (कृपया यह भी पुष्टि करें कि आप 18+ हैं)",
+          "ਤੁਹਾਡਾ ਪੂਰਾ ਨਾਮ ਕੀ ਹੈ? (ਕਿਰਪਾ ਕਰਕੇ ਪੁਸ਼ਟੀ ਕਰੋ ਕਿ ਤੁਸੀਂ 18+ ਹੋ)",
+        ),
+      };
+    }
+    if (!s.email) {
+      return {
+        stage: "volunteer_collect",
+        prompt: localizedReply(
+          lang,
+          `Thank you, ${s.name}! What is your email address?`,
+          `धन्यवाद, ${s.name}! आपका ईमेल पता क्या है?`,
+          `ਧੰਨਵਾਦ, ${s.name}! ਤੁਹਾਡਾ ਈਮੇਲ ਪਤਾ ਕੀ ਹੈ?`,
+        ),
+      };
+    }
+    if (!s.subjects || !s.qualifications) {
+      return {
+        stage: "volunteer_collect",
+        prompt: localizedReply(
+          lang,
+          "Which subjects can you mentor, and what is your educational background / weekly availability?",
+          "आप किन विषयों में पढ़ा सकते हैं, और आपकी योग्यता व उपलब्ध समय क्या है?",
+          "ਤੁਸੀਂ ਕਿਹੜੇ ਵਿਸ਼ੇ ਪੜ੍ਹਾ ਸਕਦੇ ਹੋ ਅਤੇ ਤੁਹਾਡੀ ਯੋਗਤਾ ਤੇ ਸਮਾਂ ਕੀ ਹੈ?",
+        ),
+      };
+    }
+    return {
+      stage: "volunteer_consent",
+      prompt: localizedReply(
+        lang,
+        `Summary: ${s.name} (${s.email}) · Subjects: ${s.subjects}. Do you confirm you are 18+ and consent to Tammana contacting you to review volunteer onboarding? Reply "Yes, I consent" to submit.`,
+        `सारांश: ${s.name} (${s.email}) · विषय: ${s.subjects}। क्या आप 18+ हैं और संपर्क की सहमति देते हैं? सबमिट करने के लिए "Yes" लिखें।`,
+        `ਸਾਰ: ${s.name} (${s.email}) · ਵਿਸ਼ੇ: ${s.subjects}। ਕੀ ਤੁਸੀਂ ਸੰਪਰਕ ਕਰਨ ਦੀ ਸਹਿਮਤੀ ਦਿੰਦੇ ਹੋ? ਜਮ੍ਹਾਂ ਕਰਨ ਲਈ "Yes" ਲਿਖੋ।`,
+      ),
+    };
+  }
+
+  if (s.kind === "contact") {
+    if (!s.name) {
+      return {
+        stage: "contact_collect",
+        prompt: localizedReply(
+          lang,
+          "What is your name?",
+          "कृपया अपना नाम बताएं।",
+          "ਕਿਰਪਾ ਕਰਕੇ ਆਪਣਾ ਨਾਮ ਦੱਸੋ।",
+        ),
+      };
+    }
+    if (!s.email) {
+      return {
+        stage: "contact_collect",
+        prompt: localizedReply(
+          lang,
+          `Thanks ${s.name}! Please share your email and a short note on how you'd like to connect or support.`,
+          `धन्यवाद ${s.name}! कृपया अपना ईमेल पता और संदेश लिखें।`,
+          `ਧੰਨਵਾਦ ${s.name}! ਕਿਰਪਾ ਕਰਕੇ ਆਪਣਾ ਈਮੇਲ ਅਤੇ ਸੁਨੇਹਾ ਲਿਖੋ।`,
+        ),
+      };
+    }
+    return {
+      stage: "contact_collect",
+      prompt: localizedReply(
+        lang,
+        "Please share your brief message for Tammana Rathore.",
+        "कृपया तमन्ना के लिए अपना संदेश लिखें।",
+        "ਕਿਰਪਾ ਕਰਕੇ ਤਮੰਨਾ ਲਈ ਆਪਣਾ ਸੁਨੇਹਾ ਲਿਖੋ।",
+      ),
+    };
+  }
+
+  // Student registration flow
+  if (!s.name) {
+    return {
+      stage: "student_collect",
+      prompt: localizedReply(
+        lang,
+        "Let's register the learner! First, what is the student's first name? (For under-18 students, please confirm you are a parent or guardian.)",
+        "आइए पंजीकरण शुरू करें! कृपया विद्यार्थी का केवल पहला नाम बताएं (और पुष्टि करें कि आप अभिभावक या 18+ शिक्षार्थी हैं)।",
+        "ਆਓ ਰਜਿਸਟ੍ਰੇਸ਼ਨ ਸ਼ੁਰੂ ਕਰੀਏ! ਕਿਰਪਾ ਕਰਕੇ ਵਿਦਿਆਰਥੀ ਦਾ ਪਹਿਲਾ ਨਾਮ ਦੱਸੋ।",
+      ),
+    };
+  }
+  if (!s.email) {
+    return {
+      stage: "student_collect",
+      prompt: localizedReply(
+        lang,
+        `Noted ${s.name}! What is the parent or guardian's email address?`,
+        `धन्यवाद! ${s.name} के माता-पिता या अभिभावक का ईमेल पता लिखें।`,
+        `ਧੰਨਵਾਦ! ${s.name} ਦੇ ਮਾਤਾ-ਪਿਤਾ ਜਾਂ ਸਰਪ੍ਰਸਤ ਦਾ ਈਮੇਲ ਪਤਾ ਦੱਸੋ।`,
+      ),
+    };
+  }
+  if (!s.classLevel) {
+    return {
+      stage: "student_collect",
+      prompt: localizedReply(
+        lang,
+        "Which class or grade is the student in? (e.g., Class 5, Class 8, or Young adult)",
+        "विद्यार्थी किस कक्षा में पढ़ता है? (जैसे: कक्षा 5, कक्षा 8 या वयस्क)",
+        "ਵਿਦਿਆਰਥੀ ਕਿਹੜੀ ਜਮਾਤ ਵਿੱਚ ਹੈ? (ਜਿਵੇਂ: ਜਮਾਤ 5, ਜਮਾਤ 8)",
+      ),
+    };
+  }
+  if (!s.subjects) {
+    return {
+      stage: "student_collect",
+      prompt: localizedReply(
+        lang,
+        "Which subjects or skills would help most (e.g., Spoken English, Mathematics, Science, Computers)?",
+        "किन विषयों या कौशलों में मदद चाहिए (जैसे: अंग्रेज़ी, गणित, विज्ञान, कंप्यूटर)?",
+        "ਕਿਹੜੇ ਵਿਸ਼ਿਆਂ ਵਿੱਚ ਮਦਦ ਚਾਹੀਦੀ ਹੈ (ਜਿਵੇਂ: ਅੰਗਰੇਜ਼ੀ, ਗਣਿਤ, ਵਿਗਿਆਨ, ਕੰਪਿਊਟਰ)?",
+      ),
+    };
+  }
+  return {
+    stage: "student_consent",
+    prompt: localizedReply(
+      lang,
+      `Almost done! Summary — Student: ${s.name} · Class: ${s.classLevel} · Subjects: ${s.subjects} · Email: ${s.email}. All classes are 100% free. Do you confirm parent/guardian consent for Tammana to follow up? Reply "Yes, I consent" to submit.`,
+      `लगभग पूरा! विद्यार्थी: ${s.name} · कक्षा: ${s.classLevel} · विषय: ${s.subjects} · ईमेल: ${s.email}। क्या आप संपर्क करने की सहमति देते हैं? जमा करने के लिए "Yes" लिखें।`,
+      `ਲਗਭਗ ਪੂਰਾ! ਵਿਦਿਆਰਥੀ: ${s.name} · ਜਮਾਤ: ${s.classLevel} · ਵਿਸ਼ੇ: ${s.subjects}। ਕੀ ਤੁਸੀਂ ਸੰਪਰਕ ਦੀ ਸਹਿਮਤੀ ਦਿੰਦੇ ਹੋ? ਜਮ੍ਹਾਂ ਕਰਨ ਲਈ "Yes" ਲਿਖੋ।`,
+    ),
+  };
 }
 
 export function generateRabataAgentReply(
@@ -500,354 +875,240 @@ export function generateRabataAgentReply(
   const trimmed = userInput.trim();
   const lower = trimmed.toLowerCase();
 
-  // Emergency safeguarding rule from System Prompt (takes absolute priority)
-  if (
-    /(danger|abuse|violence|emergency|hurt|harass|unsafe|kidnap|खतरा|आपात|ਮਦਦ|ਖਤਰਾ)/.test(lower)
-  ) {
+  // 1. Absolute Priority: Safeguarding Emergency & Sensitive PII guardrails
+  if (/(danger|abuse|violence|emergency|hurt|unsafe|kidnap|खतरा|आपात|ਖਤਰਾ)/.test(lower)) {
     return {
       reply: localizedReply(
         lang,
         "This assistant is not an emergency service. If a child or person is in immediate danger in India, please dial 112 for Emergency Services or 1098 for Childline India immediately.",
-        "यह चैट एक आपातकालीन सेवा नहीं है। यदि भारत में कोई बच्चा या व्यक्ति तत्काल खतरे में है, तो कृपया तुरंत 112 (आपातकालीन सेवा) या 1098 (चाइल्डलाइन इंडिया) पर कॉल करें।",
-        "ਇਹ ਸਹਾਇਕ ਐਮਰਜੈਂਸੀ ਸੇਵਾ ਨਹੀਂ ਹੈ। ਜੇ ਭਾਰਤ ਵਿੱਚ ਕੋਈ ਬੱਚਾ ਤੁਰੰਤ ਖ਼ਤਰੇ ਵਿੱਚ ਹੈ, ਤਾਂ ਕਿਰਪਾ ਕਰਕੇ ਤੁਰੰਤ 112 ਜਾਂ 1098 (ਚਾਈਲਡਲਾਈਨ) ਤੇ ਕਾਲ ਕਰੋ।",
+        "यह चैट आपातकालीन सेवा नहीं है। यदि भारत में कोई बच्चा खतरे में है, तो कृपया तुरंत 112 या 1098 (चाइल्डलाइन इंडिया) पर कॉल करें।",
+        "ਇਹ ਐਮਰਜੈਂਸੀ ਸੇਵਾ ਨਹੀਂ ਹੈ। ਜੇ ਕੋਈ ਬੱਚਾ ਖ਼ਤਰੇ ਵਿੱਚ ਹੈ, ਤਾਂ ਤੁਰੰਤ 112 ਜਾਂ 1098 (ਚਾਈਲਡਲਾਈਨ) ਤੇ ਕਾਲ ਕਰੋ।",
       ),
       nextState: state,
     };
   }
 
-  // Handle mid-flow safeguarding checks against sensitive docs / bank data
   if (/(aadhaar|aadhar|pan card|credit card|cvv|otp|upi pin|bank account|आधार)/.test(lower)) {
     return {
       reply: localizedReply(
         lang,
-        "For your safety, Rabata never collects Aadhaar numbers, government IDs, bank details, or children's personal phone numbers. Let's continue with just basic learning details!",
-        "आपकी सुरक्षा के लिए राबता कभी भी आधार नंबर, पहचान पत्र, बैंक विवरण या बच्चों के व्यक्तिगत फ़ोन नंबर नहीं मांगता। आइए केवल बुनियादी पढ़ाई की जानकारी साझा करें।",
-        "ਤੁਹਾਡੀ ਸੁਰੱਖਿਆ ਲਈ ਰਾਬਤਾ ਕਦੇ ਵੀ ਆਧਾਰ ਨੰਬਰ, ਬੈਂਕ ਵੇਰਵੇ ਜਾਂ ਬੱਚੇ ਦਾ ਨਿੱਜੀ ਫ਼ੋਨ ਨੰਬਰ ਨਹੀਂ ਲੈਂਦਾ। ਆਓ ਸਿਰਫ਼ ਪੜ੍ਹਾਈ ਦੀ ਬੁਨਿਆਦੀ ਜਾਣਕਾਰੀ ਸਾਂਝੀ ਕਰੀਏ।",
+        "For your safety, Rabata never collects Aadhaar numbers, government IDs, bank details, or children's personal phone numbers.",
+        "आपकी सुरक्षा के लिए राबता कभी आधार नंबर, पहचान पत्र या बैंक विवरण नहीं मांगता।",
+        "ਤੁਹਾਡੀ ਸੁਰੱਖਿਆ ਲਈ ਰਾਬਤਾ ਕਦੇ ਆਧਾਰ ਨੰਬਰ ਜਾਂ ਬੈਂਕ ਵੇਰਵੇ ਨਹੀਂ ਲੈਂਦਾ।",
       ),
       nextState: state,
     };
   }
 
-  // Start guided flows from idle or explicit restart keywords
-  if (state.stage === "idle") {
-    if (
-      /(register|student|child|admission|enroll|class|study|पंजीकरण|छात्र|दाखिला|ਵਿਦਿਆਰਥੀ|ਦਾਖਲਾ)/.test(
-        lower,
-      )
-    ) {
-      return {
-        reply: localizedReply(
-          lang,
-          "I’d love to help register a learner for Rabata's 100% free classes! First, for child safety: are you a parent/legal guardian (or an adult learner 18+)? Please reply 'Yes' to begin.",
-          "मैं निःशुल्क कक्षाओं के लिए पंजीकरण में खुशी से मदद करूँगा! बाल सुरक्षा के तहत, क्या आप माता-पिता/अभिभावक (या 18+ वयस्क शिक्षार्थी) हैं? शुरू करने के लिए 'हाँ' लिखें।",
-          "ਮੈਂ ਮੁਫ਼ਤ ਜਮਾਤਾਂ ਲਈ ਰਜਿਸਟ੍ਰੇਸ਼ਨ ਵਿੱਚ ਮਦਦ ਕਰਾਂਗਾ! ਬਾਲ ਸੁਰੱਖਿਆ ਲਈ, ਕੀ ਤੁਸੀਂ ਮਾਤਾ-ਪਿਤਾ/ਸਰਪ੍ਰਸਤ (ਜਾਂ 18+ ਵਿਦਿਆਰਥੀ) ਹੋ? ਸ਼ੁਰੂ ਕਰਨ ਲਈ 'ਹਾਂ' ਲਿਖੋ।",
-        ),
-        nextState: { ...state, stage: "student_guardian_check", kind: "student" },
-      };
-    }
-
-    if (/(volunteer|mentor|teach|teacher|शिक्षक|स्वयंसेवा|पढ़ा|ਅਧਿਆਪਕ|ਵਲੰਟੀਅਰ)/.test(lower)) {
-      return {
-        reply: localizedReply(
-          lang,
-          "Thank you for wanting to mentor with Rabata! Both experienced teachers and new volunteers are welcome. First, please confirm you are 18 or older ('Yes' to continue).",
-          "राबता के साथ जुड़कर पढ़ाने की इच्छा के लिए धन्यवाद! अनुभवी व नए दोनों स्वयंसेवकों का स्वागत है। पहले कृपया पुष्टि करें कि आपकी आयु 18 वर्ष या उससे अधिक है ('हाँ' लिखें)।",
-          "ਰਾਬਤਾ ਨਾਲ ਵਲੰਟੀਅਰ ਵਜੋਂ ਜੁੜਨ ਲਈ ਧੰਨਵਾਦ! ਪਹਿਲਾਂ ਕਿਰਪਾ ਕਰਕੇ ਪੁਸ਼ਟੀ ਕਰੋ ਕਿ ਤੁਹਾਡੀ ਉਮਰ 18 ਸਾਲ ਜਾਂ ਵੱਧ ਹੈ ('ਹਾਂ' ਲਿਖੋ)।",
-        ),
-        nextState: { ...state, stage: "volunteer_age_check", kind: "volunteer" },
-      };
-    }
-
-    if (
-      /(donat|fund|money|money|ledger|transparent|support|food|partner|दान|फंड|सहयोग|ਮਦਦ|ਫੰਡ)/.test(
-        lower,
-      )
-    ) {
-      return {
-        reply: localizedReply(
-          lang,
-          `You can support Rabata with books, notebooks, food drives, or digital gear — and inspect every rupee with receipt proofs on our Fund Transparency page (/funds). Want Tammana to reach out? Reply with your name to leave a quick supporter note (never share card/UPI PINs).`,
-          `आप किताबों, कॉपियों, भोजन अभियान या डिजिटल संसाधनों से राबता का सहयोग कर सकते हैं और हमारे फंड पारदर्शिता पेज (/funds) पर हर खर्च की रसीद देख सकते हैं। यदि आप जुड़ना चाहते हैं तो अपना नाम लिखें (कृपया कार्ड/UPI पिन साझा न करें)।`,
-          `ਤੁਸੀਂ ਕਿਤਾਬਾਂ, ਕਾਪੀਆਂ ਜਾਂ ਭੋਜਨ ਸੇਵਾ ਰਾਹੀਂ ਮਦਦ ਕਰ ਸਕਦੇ ਹੋ ਅਤੇ /funds ਪੇਜ ਤੇ ਹਰ ਖਰਚ ਦੀ ਰਸੀਦ ਦੇਖ ਸਕਦੇ ਹੋ। ਜੇ ਤੁਸੀਂ ਸੰਪਰਕ ਕਰਨਾ ਚਾਹੁੰਦੇ ਹੋ ਤਾਂ ਆਪਣਾ ਨਾਮ ਦੱਸੋ।`,
-        ),
-        nextState: { ...state, stage: "contact_email", kind: "contact" },
-      };
-    }
-
-    if (
-      /(phone|call|number|helpline|sarvam|address|location|derabassi|फ़ोन|नंबर|पता|ਫ਼ੋਨ|ਪਤਾ)/.test(
-        lower,
-      )
-    ) {
-      return {
-        reply: localizedReply(
-          lang,
-          `You can reach Rabata's 24x7 Multilingual Sarvam AI Voice Helpline anytime at ${site.phoneDisplay} (${site.phone}) in Hindi, Punjabi, or English, or email ${site.email}. In-person classes take place in Derabassi, Punjab; visits are scheduled personally by Tammana Rathore after registration for safeguarding.`,
-          `आप राबता की 24x7 बहुभाषी Sarvam AI हेल्पलाइन ${site.phoneDisplay} पर कभी भी हिंदी, पंजाबी या अंग्रेज़ी में कॉल कर सकते हैं, या ${site.email} पर ईमेल कर सकते हैं। डेराबस्सी केंद्र में मुलाकात पंजीकरण समीक्षा के बाद तमन्ना द्वारा तय की जाती है।`,
-          `ਤੁਸੀਂ ਰਾਬਤਾ ਦੀ Sarvam AI ਹੈਲਪਲਾਈਨ ${site.phoneDisplay} ਤੇ ਹਿੰਦੀ, ਪੰਜਾਬੀ ਜਾਂ ਅੰਗਰੇਜ਼ੀ ਵਿੱਚ ਕਦੇ ਵੀ ਕਾਲ ਕਰ ਸਕਦੇ ਹੋ, ਜਾਂ ${site.email} ਤੇ ਈਮੇਲ ਕਰ ਸਕਦੇ ਹੋ।`,
-        ),
-        nextState: state,
-      };
-    }
-
+  // 2. Escape hatch: Allow user to cancel/reset a flow anytime
+  if (
+    state.stage !== "idle" &&
+    /^(cancel|stop|exit|quit|back|reset|never mind|nahi|no thanks|बंद|नहीं)$/i.test(trimmed)
+  ) {
     return {
       reply: localizedReply(
         lang,
-        `Rabata offers 100% free Spoken English, Maths, Science, Digital Literacy, Career Interview prep, and Recorded Lectures (/learn) in Derabassi & online. Type "register student", "volunteer", or "donate/contact" — or call our Sarvam AI Voice Helpline anytime at ${site.phoneDisplay}!`,
-        `राबता डेराबस्सी व ऑनलाइन माध्यम से निःशुल्क अंग्रेज़ी, गणित, विज्ञान, कंप्यूटर, करियर मार्गदर्शन और रिकॉर्डेड लेक्चर (/learn) प्रदान करता है। शुरू करने के लिए "register student", "volunteer", या "contact" लिखें — या ${site.phoneDisplay} पर कॉल करें!`,
-        `ਰਾਬਤਾ ਡੇਰਾਬੱਸੀ ਅਤੇ ਆਨਲਾਈਨ ਰਾਹੀਂ ਮੁਫ਼ਤ ਅੰਗਰੇਜ਼ੀ, ਗਣਿਤ, ਵਿਗਿਆਨ, ਕੰਪਿਊਟਰ ਅਤੇ ਕਰੀਅਰ ਮਦਦ ਦਿੰਦਾ ਹੈ। "register student", "volunteer" ਜਾਂ "contact" ਲਿਖੋ — ਜਾਂ ${site.phoneDisplay} ਤੇ ਕਾਲ ਕਰੋ!`,
-      ),
-      nextState: state,
-    };
-  }
-
-  // Student Registration Flow
-  if (state.stage === "student_guardian_check") {
-    return {
-      reply: localizedReply(
-        lang,
-        "Thank you. What is the student's first name? (First name only, please.)",
-        "धन्यवाद। कृपया विद्यार्थी का केवल पहला नाम बताएं।",
-        "ਧੰਨਵਾਦ। ਕਿਰਪਾ ਕਰਕੇ ਵਿਦਿਆਰਥੀ ਦਾ ਸਿਰਫ਼ ਪਹਿਲਾ ਨਾਮ ਦੱਸੋ।",
-      ),
-      nextState: { ...state, stage: "student_name" },
-    };
-  }
-
-  if (state.stage === "student_name") {
-    return {
-      reply: localizedReply(
-        lang,
-        `Great, noting ${trimmed}! What is the parent or guardian's contact email address?`,
-        `बढ़िया! अब माता-पिता या अभिभावक का ईमेल पता लिखें।`,
-        `ਬਹੁਤ ਵਧੀਆ! ਹੁਣ ਮਾਤਾ-ਪਿਤਾ ਜਾਂ ਸਰਪ੍ਰਸਤ ਦਾ ਈਮੇਲ ਪਤਾ ਦੱਸੋ।`,
-      ),
-      nextState: { ...state, name: trimmed.slice(0, 100), stage: "student_email" },
-    };
-  }
-
-  if (state.stage === "student_email") {
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      return {
-        reply: localizedReply(
-          lang,
-          "Please share a valid email address (for example: name@example.com) so Tammana can reply safely.",
-          "कृपया एक सही ईमेल पता लिखें (जैसे: name@example.com) ताकि तमन्ना आपसे संपर्क कर सकें।",
-          "ਕਿਰਪਾ ਕਰਕੇ ਸਹੀ ਈਮੇਲ ਪਤਾ ਲਿਖੋ (ਜਿਵੇਂ: name@example.com)।",
-        ),
-        nextState: state,
-      };
-    }
-    return {
-      reply: localizedReply(
-        lang,
-        "Got it! Which class or grade level is the student in? (e.g., 1–3, 4–5, 6–8, 9–10, 11–12, or Young adult)",
-        "ठीक है! विद्यार्थी किस कक्षा में पढ़ता है? (जैसे: 1–3, 4–5, 6–8, 9–10, 11–12 या वयस्क)",
-        "ਠੀਕ ਹੈ! ਵਿਦਿਆਰਥੀ ਕਿਹੜੀ ਜਮਾਤ ਵਿੱਚ ਹੈ? (ਜਿਵੇਂ: 1–3, 4–5, 6–8, 9–10, 11–12)",
-      ),
-      nextState: { ...state, email: trimmed.toLowerCase(), stage: "student_class" },
-    };
-  }
-
-  if (state.stage === "student_class") {
-    return {
-      reply: localizedReply(
-        lang,
-        "Which subjects or skills would help most? (e.g., Spoken English, Mathematics, Science, Computer basics)",
-        "विद्यार्थी को किन विषयों या कौशलों में मदद चाहिए? (जैसे: अंग्रेज़ी, गणित, विज्ञान, कंप्यूटर)",
-        "ਕਿਹੜੇ ਵਿਸ਼ਿਆਂ ਵਿੱਚ ਮਦਦ ਚਾਹੀਦੀ ਹੈ? (ਜਿਵੇਂ: ਅੰਗਰੇਜ਼ੀ, ਗਣਿਤ, ਵਿਗਿਆਨ, ਕੰਪਿਊਟਰ)",
-      ),
-      nextState: { ...state, classLevel: trimmed.slice(0, 30), stage: "student_subjects" },
-    };
-  }
-
-  if (state.stage === "student_subjects") {
-    return {
-      reply: localizedReply(
-        lang,
-        "Preferred teaching language & format? (e.g., Hindi & English, In person in Derabassi or Online)",
-        "पसंदीदा भाषा और माध्यम बताएं (जैसे: हिंदी/अंग्रेज़ी, डेराबस्सी में ऑफलाइन या ऑनलाइन)?",
-        "ਪਸੰਦੀਦਾ ਭਾਸ਼ਾ ਅਤੇ ਤਰੀਕਾ ਦੱਸੋ (ਜਿਵੇਂ: ਪੰਜਾਬੀ/ਹਿੰਦੀ, ਡੇਰਾਬੱਸੀ ਆਫਲਾਈਨ ਜਾਂ ਆਨਲਾਈਨ)?",
-      ),
-      nextState: { ...state, subjects: trimmed.slice(0, 200), stage: "student_format" },
-    };
-  }
-
-  if (state.stage === "student_format") {
-    const inferredFormat = /online|ऑनलाइन|ਆਨਲਾਈਨ/i.test(trimmed)
-      ? "Online"
-      : /either|any|दोनों|ਦੋਵੇਂ/i.test(trimmed)
-        ? "Either"
-        : "In person";
-    return {
-      reply: localizedReply(
-        lang,
-        `Almost done! Summary for ${state.name}: Class ${state.classLevel}, Subjects: ${state.subjects}, Format: ${inferredFormat}. Do you consent to Rabata storing this enquiry so Tammana can contact ${state.email} about availability? Reply "Yes, I consent" to submit.`,
-        `लगभग पूरा! विद्यार्थी: ${state.name}, कक्षा: ${state.classLevel}, विषय: ${state.subjects}। क्या आप सहमति देते हैं कि राबता यह जानकारी सहेजे ताकि तमन्ना ${state.email} पर संपर्क करें? जमा करने के लिए "Yes" या "हाँ" लिखें।`,
-        `ਲਗਭਗ ਪੂਰਾ! ਵਿਦਿਆਰਥੀ: ${state.name}, ਜਮਾਤ: ${state.classLevel}, ਵਿਸ਼ੇ: ${state.subjects}। ਕੀ ਤੁਸੀਂ ${state.email} ਤੇ ਸੰਪਰਕ ਕਰਨ ਦੀ ਸਹਿਮਤੀ ਦਿੰਦੇ ਹੋ? ਜਮ੍ਹਾਂ ਕਰਨ ਲਈ "Yes" ਜਾਂ "ਹਾਂ" ਲਿਖੋ।`,
-      ),
-      nextState: {
-        ...state,
-        format: inferredFormat,
-        message: `AI Chat Student Registration — Student: ${state.name}, Class: ${state.classLevel}, Subjects: ${state.subjects}, Preference noted: ${trimmed}`,
-        stage: "student_consent",
-      },
-    };
-  }
-
-  if (state.stage === "student_consent") {
-    const vars: SarvamOutputVariables = {
-      kind: "student",
-      name: state.name,
-      email: state.email,
-      classLevel: state.classLevel,
-      subjects: state.subjects,
-      language: state.language,
-      format: state.format,
-      message: state.message,
-      consent: true,
-      resolved_intent: "student_registration",
-    };
-    return {
-      reply: localizedReply(
-        lang,
-        `Thank you! Registration for ${state.name} has been securely logged for Tammana Rathore to review (All classes remain 100% free; confirmation follows shortly). Feel free to call ${site.phoneDisplay} anytime!`,
-        `धन्यवाद! ${state.name} का पंजीकरण सुरक्षित रूप से दर्ज हो गया है। तमन्ना जल्द ही ${state.email} पर आपसे संपर्क करेंगी (सभी कक्षाएं 100% निःशुल्क हैं)। आप ${site.phoneDisplay} पर भी कॉल कर सकते हैं!`,
-        `ਧੰਨਵਾਦ! ${state.name} ਦੀ ਰਜਿਸਟ੍ਰੇਸ਼ਨ ਸੁਰੱਖਿਅਤ ਢੰਗ ਨਾਲ ਦਰਜ ਹੋ ਗਈ ਹੈ। ਤਮੰਨਾ ਜਲਦੀ ਹੀ ${state.email} ਤੇ ਸੰਪਰਕ ਕਰਨਗੇ।`,
+        `No problem! I've cleared that draft. Feel free to ask any question about Rabata or call ${site.phoneDisplay}.`,
+        `कोई बात नहीं! मैंने वह प्रक्रिया रोक दी है। आप कोई भी सवाल पूछ सकते हैं या ${site.phoneDisplay} पर कॉल कर सकते हैं।`,
+        `ਕੋਈ ਗੱਲ ਨਹੀਂ! ਤੁਸੀਂ ਰਾਬਤਾ ਬਾਰੇ ਕੋਈ ਵੀ ਸਵਾਲ ਪੁੱਛ ਸਕਦੇ ਹੋ ਜਾਂ ${site.phoneDisplay} ਤੇ ਕਾਲ ਕਰ ਸਕਦੇ ਹੋ।`,
       ),
       nextState: createInitialChatSession(lang),
-      completedEnquiry: vars,
     };
   }
 
-  // Volunteer Flow
-  if (state.stage === "volunteer_age_check") {
-    return {
-      reply: localizedReply(
-        lang,
-        "Wonderful! What is your full name?",
-        "बहुत अच्छा! कृपया अपना पूरा नाम लिखें।",
-        "ਬਹੁਤ ਵਧੀਆ! ਕਿਰਪਾ ਕਰਕੇ ਆਪਣਾ ਪੂਰਾ ਨਾਮ ਲਿਖੋ।",
-      ),
-      nextState: { ...state, stage: "volunteer_name" },
-    };
-  }
+  // 3. Detect genuine informational questions BEFORE triggering or trapping inside flows
+  const isQuestionPhrase =
+    trimmed.endsWith("?") ||
+    /^(what|which|where|who|when|how|why|is |are |do |can |tell me|explain|kya|kaha|kab|kaise|kaun|क्या|कहाँ|कब|कैसे)/i.test(
+      lower,
+    );
+  const entities = extractEntities(trimmed);
+  const directAnswer = answerKnowledgeQuestion(lower, lang);
 
-  if (state.stage === "volunteer_name") {
-    return {
-      reply: localizedReply(
-        lang,
-        `Nice to meet you, ${trimmed}! What is your email address?`,
-        `आपसे मिलकर खुशी हुई, ${trimmed}! कृपया अपना ईमेल पता लिखें।`,
-        `ਤੁਹਾਨੂੰ ਮਿਲ ਕੇ ਖੁਸ਼ੀ ਹੋਈ, ${trimmed}! ਕਿਰਪਾ ਕਰਕੇ ਆਪਣਾ ਈਮੇਲ ਪਤਾ ਦੱਸੋ।`,
-      ),
-      nextState: { ...state, name: trimmed.slice(0, 100), stage: "volunteer_email" },
-    };
-  }
-
-  if (state.stage === "volunteer_email") {
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+  if (isQuestionPhrase && directAnswer && !entities.email && !entities.name) {
+    if (state.stage !== "idle") {
+      const nextStep = getNextMissingPrompt(state, lang);
       return {
-        reply: localizedReply(
-          lang,
-          "Please provide a valid email address so Rabata can respond.",
-          "कृपया एक मान्य ईमेल पता दर्ज करें।",
-          "ਕਿਰਪਾ ਕਰਕੇ ਸਹੀ ਈਮੇਲ ਪਤਾ ਲਿਖੋ।",
-        ),
+        reply: `${directAnswer}\n\n${nextStep.prompt}`,
         nextState: state,
       };
     }
-    return {
-      reply: localizedReply(
-        lang,
-        "What are your qualifications and which subjects/classes can you mentor?",
-        "आपकी शैक्षणिक योग्यता क्या है और आप कौन से विषय व कक्षाएं पढ़ा सकते हैं?",
-        "ਤੁਹਾਡੀ ਯੋਗਤਾ ਕੀ ਹੈ ਅਤੇ ਤੁਸੀਂ ਕਿਹੜੇ ਵਿਸ਼ੇ ਪੜ੍ਹਾ ਸਕਦੇ ਹੋ?",
-      ),
-      nextState: { ...state, email: trimmed.toLowerCase(), stage: "volunteer_qualifications" },
-    };
+    return { reply: directAnswer, nextState: state };
   }
 
-  if (state.stage === "volunteer_qualifications") {
-    return {
-      reply: localizedReply(
-        lang,
-        "What weekly days/hours work for you, and do you agree to Rabata contacting you regarding volunteer onboarding? Reply with your availability and 'Yes'.",
-        "आप सप्ताह में किस समय पढ़ा सकते हैं और क्या आप संपर्क की सहमति देते हैं?",
-        "ਤੁਸੀਂ ਹਫ਼ਤੇ ਵਿੱਚ ਕਿਹੜੇ ਦਿਨ ਪੜ੍ਹਾ ਸਕਦੇ ਹੋ? ਕਿਰਪਾ ਕਰਕੇ ਸਹਿਮਤੀ ਲਈ 'Yes' ਨਾਲ ਲਿਖੋ।",
-      ),
-      nextState: {
-        ...state,
-        qualifications: trimmed.slice(0, 290),
-        subjects: trimmed.slice(0, 180),
-        stage: "volunteer_consent",
-      },
-    };
+  // 4. Consent confirmation step
+  if (state.stage === "student_consent") {
+    if (/^(yes|yeah|yep|yup|sure|ok|okay|i consent|agree|confirm|haan|ha|हाँ|जी|ਹਾਂ)/i.test(lower)) {
+      const vars: SarvamOutputVariables = {
+        kind: "student",
+        name: state.name,
+        email: state.email,
+        classLevel: state.classLevel || "6–8",
+        subjects: state.subjects || "General Support",
+        language: state.language || "Hindi and English",
+        format: state.format || "In person",
+        message: `AI Chat Registration — Student: ${state.name}, Class: ${state.classLevel}, Subjects: ${state.subjects}`,
+        consent: true,
+        resolved_intent: "student_registration",
+      };
+      return {
+        reply: localizedReply(
+          lang,
+          `Thank you! Registration for ${state.name} has been securely logged for Tammana Rathore to review (all classes remain 100% free; confirmation follows at ${state.email}). You can also call ${site.phoneDisplay} anytime.`,
+          `धन्यवाद! ${state.name} का पंजीकरण सुरक्षित रूप से दर्ज हो गया है। तमन्ना जल्द ही ${state.email} पर संपर्क करेंगी।`,
+          `ਧੰਨਵਾਦ! ${state.name} ਦੀ ਰਜਿਸਟ੍ਰੇਸ਼ਨ ਦਰਜ ਹੋ ਗਈ ਹੈ। ਤਮੰਨਾ ਜਲਦੀ ${state.email} ਤੇ ਸੰਪਰਕ ਕਰਨਗੇ।`,
+        ),
+        nextState: createInitialChatSession(lang),
+        completedEnquiry: vars,
+      };
+    }
   }
 
   if (state.stage === "volunteer_consent") {
-    const vars: SarvamOutputVariables = {
-      kind: "volunteer",
-      name: state.name,
-      email: state.email,
-      subjects: state.subjects || "General mentorship",
-      qualifications: state.qualifications || "College / community volunteer",
-      availability: trimmed.slice(0, 190),
-      format: "Either",
-      message: `AI Chat Volunteer Application — Qualifications & Subjects: ${state.qualifications}. Availability: ${trimmed}`,
-      consent: true,
-      resolved_intent: "volunteer_application",
-    };
+    if (/^(yes|yeah|yep|yup|sure|ok|okay|i consent|agree|confirm|haan|ha|हाँ|जी|ਹਾਂ)/i.test(lower)) {
+      const vars: SarvamOutputVariables = {
+        kind: "volunteer",
+        name: state.name,
+        email: state.email,
+        subjects: state.subjects || "General mentorship",
+        qualifications: state.qualifications || "Volunteer mentor",
+        availability: state.availability || "Flexible",
+        format: "Either",
+        message: `AI Chat Volunteer Application — ${state.qualifications} | Subjects: ${state.subjects}`,
+        consent: true,
+        resolved_intent: "volunteer_application",
+      };
+      return {
+        reply: localizedReply(
+          lang,
+          `Thank you, ${state.name}! Your volunteer application has been logged for Tammana's review at ${site.email}.`,
+          `धन्यवाद, ${state.name}! आपका स्वयंसेवक आवेदन सहेज लिया गया है।`,
+          `ਧੰਨਵਾਦ, ${state.name}! ਤੁਹਾਡੀ ਵਲੰਟੀਅਰ ਅਰਜ਼ੀ ਦਰਜ ਹੋ ਗਈ ਹੈ।`,
+        ),
+        nextState: createInitialChatSession(lang),
+        completedEnquiry: vars,
+      };
+    }
+  }
+
+  // 5. Explicit intent detection from idle
+  if (state.stage === "idle") {
+    const wantsStudent =
+      /(register|enroll|enrol|admission|join class|sign up my|my son|my daughter|my child|student registration|पंजीकरण|दाखिला|ਵਿਦਿਆਰਥੀ ਰਜਿਸਟ)/.test(
+        lower,
+      );
+    const wantsVolunteer =
+      /(i want to volunteer|volunteer|become a mentor|apply to teach|teach with|mentor with|स्वयंसेवा|ਪੜ੍ਹਾਉਣਾ)/.test(
+        lower,
+      );
+    const wantsContact =
+      /(donate|support|sponsor|partner|contact tammana|leave a message|donation|दान|संदेश|ਮਦਦ)/.test(
+        lower,
+      );
+
+    if (wantsVolunteer) {
+      const merged: ChatSessionState = { ...state, ...entities, kind: "volunteer" };
+      const next = getNextMissingPrompt(merged, lang);
+      return { reply: next.prompt, nextState: { ...merged, stage: next.stage } };
+    }
+
+    if (wantsContact && !wantsStudent) {
+      const merged: ChatSessionState = { ...state, ...entities, kind: "contact" };
+      const next = getNextMissingPrompt(merged, lang);
+      return { reply: next.prompt, nextState: { ...merged, stage: next.stage } };
+    }
+
+    if (wantsStudent) {
+      const merged: ChatSessionState = { ...state, ...entities, kind: "student" };
+      const next = getNextMissingPrompt(merged, lang);
+      return { reply: next.prompt, nextState: { ...merged, stage: next.stage } };
+    }
+
+    if (directAnswer) {
+      return { reply: directAnswer, nextState: state };
+    }
+
     return {
       reply: localizedReply(
         lang,
-        `Thank you, ${state.name}! Your volunteer mentor application is saved and sent for Tammana's review at ${site.email}.`,
-        `धन्यवाद, ${state.name}! आपका स्वयंसेवक आवेदन सहेज लिया गया है और तमन्ना की समीक्षा के लिए भेज दिया गया है।`,
-        `ਧੰਨਵਾਦ, ${state.name}! ਤੁਹਾਡੀ ਵਲੰਟੀਅਰ ਅਰਜ਼ੀ ਸੁਰੱਖਿਅਤ ਢੰਗ ਨਾਲ ਦਰਜ ਹੋ ਗਈ ਹੈ।`,
+        `I can answer questions about Rabata's free programs, recorded lectures (/learn), and open fund ledger (/funds) — or help you register a student, volunteer as a mentor, or send a message. Our 24x7 AI Helpline is also reachable at ${site.phoneDisplay}. What would you like to do?`,
+        `मैं राबता की निःशुल्क कक्षाओं, रिकॉर्डेड लेक्चर (/learn) और फंड पारदर्शिता (/funds) से जुड़े सवालों के जवाब दे सकता हूँ — या छात्र पंजीकरण व स्वयंसेवा में मदद कर सकता हूँ। हेल्पलाइन: ${site.phoneDisplay}`,
+        `ਮੈਂ ਰਾਬਤਾ ਦੀਆਂ ਮੁਫ਼ਤ ਜਮਾਤਾਂ, ਲੈਕਚਰ (/learn) ਅਤੇ ਫੰਡ ਪਾਰਦਰਸ਼ਤਾ (/funds) ਬਾਰੇ ਸਵਾਲਾਂ ਦੇ ਜਵਾਬ ਦੇ ਸਕਦਾ ਹਾਂ ਜਾਂ ਰਜਿਸਟ੍ਰੇਸ਼ਨ ਵਿੱਚ ਮਦਦ ਕਰ ਸਕਦਾ ਹਾਂ। ਹੈਲਪਲਾਈਨ: ${site.phoneDisplay}`,
       ),
-      nextState: createInitialChatSession(lang),
-      completedEnquiry: vars,
+      nextState: state,
     };
   }
 
-  // Contact / Support Flow
-  if (state.stage === "contact_email") {
-    return {
-      reply: localizedReply(
-        lang,
-        "Thank you! Please share your email address and a brief message about how you'd like to connect or support.",
-        "धन्यवाद! कृपया अपना ईमेल पता और छोटा संदेश लिखें।",
-        "ਧੰਨਵਾਦ! ਕਿਰਪਾ ਕਰਕੇ ਆਪਣਾ ਈਮੇਲ ਅਤੇ ਸੁਨੇਹਾ ਲਿਖੋ।",
-      ),
-      nextState: { ...state, name: trimmed.slice(0, 100), stage: "contact_message" },
-    };
+  // 6. Active guided slot-filling (fill only what was missing without overwriting earlier slots!)
+  const updated: ChatSessionState = { ...state };
+  if (entities.email && !updated.email) updated.email = entities.email;
+  if (entities.classLevel && !updated.classLevel) updated.classLevel = entities.classLevel;
+  if (entities.subjects && !updated.subjects) updated.subjects = entities.subjects;
+  if (entities.language) updated.language = entities.language;
+  if (entities.format) updated.format = entities.format;
+  if (entities.guardianConfirmed) updated.guardianConfirmed = true;
+  if (entities.name && !updated.name) updated.name = entities.name;
+
+  if (updated.kind === "contact") {
+    if (!updated.name && !entities.email) {
+      updated.name = trimmed.slice(0, 80);
+    } else if (updated.name && updated.email && !updated.message) {
+      const vars: SarvamOutputVariables = {
+        kind: "contact",
+        name: updated.name,
+        email: updated.email,
+        message: `AI Chat Support/Contact: ${trimmed}`,
+        consent: true,
+        resolved_intent: "supporter_contact",
+      };
+      return {
+        reply: localizedReply(
+          lang,
+          `Thank you, ${updated.name}! Your message has been logged for Tammana at ${site.email}. You can also check our Fund Transparency ledger at /funds.`,
+          `धन्यवाद, ${updated.name}! आपका संदेश दर्ज कर लिया गया है।`,
+          `ਧੰਨਵਾਦ, ${updated.name}! ਤੁਹਾਡਾ ਸੁਨੇਹਾ ਦਰਜ ਕਰ ਲਿਆ ਗਿਆ ਹੈ।`,
+        ),
+        nextState: createInitialChatSession(lang),
+        completedEnquiry: vars,
+      };
+    }
+    const next = getNextMissingPrompt(updated, lang);
+    return { reply: next.prompt, nextState: { ...updated, stage: next.stage } };
   }
 
-  if (state.stage === "contact_message") {
-    const emailMatch = trimmed.match(/[^\s@]+@[^\s@]+\.[^\s@]+/);
-    const extractedEmail = emailMatch ? emailMatch[0].toLowerCase() : "supporter@rabata.local";
-    const vars: SarvamOutputVariables = {
-      kind: "contact",
-      name: state.name || "Community Supporter",
-      email: extractedEmail,
-      message: `AI Chat Support/Contact Enquiry: ${trimmed}`,
-      consent: true,
-      resolved_intent: "supporter_contact",
-    };
-    return {
-      reply: localizedReply(
-        lang,
-        `Your note has been logged! Tammana will review it and reply from ${site.email}. You can also inspect every receipt-backed expense anytime on /funds.`,
-        `आपका संदेश दर्ज हो गया है! तमन्ना जल्द ही ${site.email} से उत्तर देंगी। आप /funds पर सभी खर्च की रसीदें भी देख सकते हैं।`,
-        `ਤੁਹਾਡਾ ਸੁਨੇਹਾ ਦਰਜ ਹੋ ਗਿਆ ਹੈ! ਤਮੰਨਾ ਜਲਦੀ ${site.email} ਤੋਂ ਜਵਾਬ ਦੇਣਗੇ।`,
-      ),
-      nextState: createInitialChatSession(lang),
-      completedEnquiry: vars,
-    };
+  if (updated.kind === "volunteer") {
+    if (!updated.name && trimmed.length <= 45 && !entities.email && !isQuestionPhrase) {
+      updated.name =
+        trimmed.replace(/\b(yes|i am 18\+|18\+|confirm|my name is)\b/gi, "").trim() || trimmed;
+    } else if (updated.name && updated.email && (!updated.subjects || !updated.qualifications)) {
+      updated.qualifications = trimmed.slice(0, 290);
+      updated.subjects = entities.subjects || trimmed.slice(0, 180);
+      updated.availability = trimmed.slice(0, 180);
+    }
+    const next = getNextMissingPrompt(updated, lang);
+    return { reply: next.prompt, nextState: { ...updated, stage: next.stage } };
   }
 
-  return {
-    reply: getWelcomeMessageForLanguage(lang),
-    nextState: createInitialChatSession(lang),
-  };
+  // Student slot filler
+  if (
+    !updated.name &&
+    !entities.email &&
+    !isQuestionPhrase &&
+    !/^(yes|haan|ha|हाँ|ਹਾਂ)$/i.test(trimmed)
+  ) {
+    updated.name = trimmed.slice(0, 60);
+  } else if (updated.name && updated.email && !updated.classLevel && !isQuestionPhrase) {
+    updated.classLevel = trimmed.slice(0, 30);
+  } else if (
+    updated.name &&
+    updated.email &&
+    updated.classLevel &&
+    !updated.subjects &&
+    !isQuestionPhrase
+  ) {
+    updated.subjects = trimmed.slice(0, 180);
+  }
+
+  const next = getNextMissingPrompt(updated, lang);
+  return { reply: next.prompt, nextState: { ...updated, stage: next.stage } };
 }

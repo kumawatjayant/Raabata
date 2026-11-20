@@ -64,8 +64,11 @@ export const listEnquiriesForAdmin = createServerFn({ method: "GET" })
       const safeDetails: Record<string, string> = {};
       if (row.details && typeof row.details === "object" && !Array.isArray(row.details)) {
         for (const [k, v] of Object.entries(row.details as Record<string, unknown>)) {
-          if (v !== undefined && v !== null && String(v).trim() !== "") {
-            safeDetails[k] = String(v);
+          if (v !== undefined && v !== null) {
+            const serialized = typeof v === "string" ? v : JSON.stringify(v);
+            if (serialized.trim() !== "") {
+              safeDetails[k] = serialized;
+            }
           }
         }
       }
