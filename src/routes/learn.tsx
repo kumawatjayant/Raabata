@@ -8,7 +8,7 @@ import {
   CheckCircle2,
   Download,
   HelpCircle,
-  MessageCircle,
+  Mic,
   Play,
   RotateCcw,
   Search,
@@ -119,12 +119,12 @@ function Learn() {
           <div className="section-head">
             <div>
               <div className="eyebrow">
-                <MessageCircle size={13} /> Spoken English practice
+                <Mic size={13} /> Spoken English practice
               </div>
               <h2>Practice speaking English</h2>
               <p className="section-copy">
-                Talk freely on any topic like chatting with a friend — get natural replies back and
-                gentle corrections whenever phrasing can be smoother.
+                Tap the orb and talk naturally on any topic — live voice practice, just like
+                speaking with a friend.
               </p>
             </div>
           </div>

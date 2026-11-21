@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  Check,
   CheckCircle2,
   Clock,
   FileText,
@@ -9,9 +10,11 @@ import {
   RefreshCw,
   Search,
   UserPlus,
+  X,
 } from "lucide-react";
 import { AdminModal } from "@/components/admin-modal";
 import { Button } from "@/components/ui/button";
+import type { RoleRow } from "@/lib/access";
 import type { AdminEnquiryItem } from "@/lib/enquiries.functions";
 import {
   convertEnquiriesToSarvamCalls,
@@ -22,6 +25,9 @@ import {
 } from "@/lib/sarvam-agent";
 import { formatClassLabel } from "@/lib/platform";
 import { site } from "@/lib/site";
+
+type CallsAndEnquiriesView =
+  "all" | "sarvam_voice_call" | "rabata_web_chatbot" | "website_enquiries" | "access_approvals";
 
 function formatLanguageLabel(code: SarvamCallRecord["detected_language"], raw?: string): string {
   if (raw && raw.trim()) return raw;
@@ -39,19 +45,27 @@ function formatDuration(seconds: number): string {
 
 export function AdminSarvamCallTracker({
   dbEnquiries,
+  roles,
+  names,
   enrolledInteractionIds,
+  onReviewRole,
   onRequestEnrollCall,
+  onRequestEnrollEnquiry,
+  onRefreshAll,
 }: {
   dbEnquiries: AdminEnquiryItem[];
+  roles: RoleRow[];
+  names: Record<string, string>;
   enrolledInteractionIds: string[];
+  onReviewRole: (id: string, decision: "active" | "rejected") => void;
   onRequestEnrollCall: (call: SarvamCallRecord) => void;
+  onRequestEnrollEnquiry: (enquiry: AdminEnquiryItem) => void;
+  onRefreshAll?: () => void;
 }) {
   const [localCalls, setLocalCalls] = useState<SarvamCallRecord[]>([]);
   const [serverCalls, setServerCalls] = useState<SarvamCallRecord[]>([]);
   const [liveConnected, setLiveConnected] = useState(false);
-  const [channelFilter, setChannelFilter] = useState<
-    "all" | "sarvam_voice_call" | "rabata_web_chatbot"
-  >("all");
+  const [viewFilter, setViewFilter] = useState<CallsAndEnquiriesView>("all");
   const [search, setSearch] = useState("");
   const [activeCall, setActiveCall] = useState<SarvamCallRecord | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -71,6 +85,7 @@ export function AdminSarvamCallTracker({
           setLiveConnected(Boolean(body.liveConnected));
         }
       }
+      onRefreshAll?.();
     } catch {
       // ignore offline preview errors
     } finally {
@@ -81,6 +96,7 @@ export function AdminSarvamCallTracker({
   useEffect(() => {
     setLocalCalls(readStoredWebCalls());
     void refreshFromServer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const allCalls = useMemo(() => {
@@ -97,17 +113,37 @@ export function AdminSarvamCallTracker({
     return combined;
   }, [dbEnquiries, liveConnected, localCalls, serverCalls]);
 
+  const query = search.trim().toLowerCase();
+
   const filteredCalls = allCalls.filter((c) => {
-    const matchesChannel = channelFilter === "all" || c.channel === channelFilter;
+    const matchesChannel =
+      viewFilter === "all" ||
+      (viewFilter === "sarvam_voice_call" && c.channel === "sarvam_voice_call") ||
+      (viewFilter === "rabata_web_chatbot" && c.channel === "rabata_web_chatbot");
     const text =
       `${c.user_phone_number} ${c.output_agent_variables.name} ${c.output_agent_variables.email} ${c.output_agent_variables.subjects ?? ""} ${JSON.stringify(c.interaction_transcript)}`.toLowerCase();
-    return matchesChannel && text.includes(search.toLowerCase());
+    return matchesChannel && (!query || text.includes(query));
+  });
+
+  const filteredEnquiries = dbEnquiries.filter((item) => {
+    if (!query) return true;
+    const text =
+      `${item.name} ${item.email} ${item.kind} ${item.details["classLevel"] ?? ""} ${item.details["subjects"] ?? ""} ${item.details["message"] ?? ""}`.toLowerCase();
+    return text.includes(query);
+  });
+
+  const nonAdminRoles = roles.filter((r) => r.role !== "admin");
+  const filteredRoles = nonAdminRoles.filter((r) => {
+    if (!query) return true;
+    const text = `${names[r.user_id] || ""} ${r.role} ${r.status}`.toLowerCase();
+    return text.includes(query);
   });
 
   const phoneCallsCount = allCalls.filter((c) => c.channel === "sarvam_voice_call").length;
   const studentCallsCount = allCalls.filter(
     (c) => c.output_agent_variables.kind === "student",
   ).length;
+  const pendingRoleCount = nonAdminRoles.filter((r) => r.status === "pending").length;
   const avgDuration =
     allCalls.length > 0
       ? Math.round(allCalls.reduce((sum, c) => sum + Number(c.duration || 0), 0) / allCalls.length)
@@ -148,183 +184,309 @@ export function AdminSarvamCallTracker({
             <UserPlus size={15} /> Student Requests
           </div>
           <div className="stat-value">{studentCallsCount}</div>
-          <small className="stat-note">Ready to review &amp; enroll</small>
+          <small className="stat-note">
+            {dbEnquiries.length} web enquiries · {pendingRoleCount} pending{" "}
+            {pendingRoleCount === 1 ? "approval" : "approvals"}
+          </small>
         </article>
       </div>
 
-      <div className="filters" style={{ gridTemplateColumns: "2fr 1fr auto" }}>
+      <div className="admin-control-bar">
         <div className="search-field">
           <Search size={16} />
           <input
-            aria-label="Search recent calls and transcripts"
-            placeholder="Search by caller phone, student name, or spoken words…"
+            aria-label="Search recent calls, enquiries, and approvals"
+            placeholder="Search by caller, name, email, or spoken words…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
         <select
-          aria-label="Filter calls"
-          value={channelFilter}
-          onChange={(e) =>
-            setChannelFilter(e.target.value as "all" | "sarvam_voice_call" | "rabata_web_chatbot")
-          }
+          aria-label="Filter calls and enquiries"
+          className="admin-control-select"
+          value={viewFilter}
+          onChange={(e) => setViewFilter(e.target.value as CallsAndEnquiriesView)}
         >
           <option value="all">All Conversations ({allCalls.length})</option>
           <option value="sarvam_voice_call">Phone Calls ({phoneCallsCount})</option>
           <option value="rabata_web_chatbot">
             Website Chat ({allCalls.length - phoneCallsCount})
           </option>
+          <option value="website_enquiries">Website Enquiries ({dbEnquiries.length})</option>
+          <option value="access_approvals">Access Approvals ({nonAdminRoles.length})</option>
         </select>
-        <button
-          type="button"
-          className="admin-action-btn admin-action-btn-secondary admin-toolbar-btn"
-          onClick={() => void refreshFromServer()}
-          disabled={refreshing}
-        >
-          <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} /> Refresh Calls
-        </button>
+        <div className="admin-control-actions">
+          <button
+            type="button"
+            className="admin-action-btn admin-action-btn-secondary admin-toolbar-btn"
+            onClick={() => void refreshFromServer()}
+            disabled={refreshing}
+          >
+            <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} /> Refresh Calls
+          </button>
+        </div>
       </div>
 
-      <div className="admin-table-wrap">
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th>Date &amp; Time</th>
-              <th>Caller &amp; Details</th>
-              <th>Channel</th>
-              <th>Request &amp; Language</th>
-              <th>Duration</th>
-              <th>Status</th>
-              <th style={{ textAlign: "right" }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredCalls.length === 0 ? (
+      {viewFilter === "website_enquiries" ? (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
               <tr>
-                <td colSpan={7} className="text-center text-muted-foreground py-8">
-                  No recent calls match your search.
-                </td>
+                <th>Date</th>
+                <th>Name &amp; Email</th>
+                <th>Type</th>
+                <th>Details / Message</th>
+                <th style={{ textAlign: "right" }}>Action</th>
               </tr>
-            ) : (
-              filteredCalls.map((call) => {
-                const vars = call.output_agent_variables;
-                const draft = extractStudentDraftFromCall(call);
-                const langName = formatLanguageLabel(
-                  call.detected_language,
-                  draft.preferred_language,
-                );
-                const intentLabel =
-                  vars.kind === "student"
-                    ? "Student Registration"
-                    : vars.kind === "volunteer"
-                      ? "Volunteer"
-                      : "Enquiry";
-                const isEnrolled =
-                  call.status === "enrolled" ||
-                  enrolledInteractionIds.includes(call.interaction_id);
-
-                const primaryTitle =
-                  draft.first_name || draft.guardian_phone || draft.guardian_email || vars.name;
-                const contactLine = [
-                  draft.guardian_phone && draft.guardian_phone !== primaryTitle
-                    ? draft.guardian_phone
-                    : "",
-                  draft.guardian_email && draft.guardian_email !== primaryTitle
-                    ? draft.guardian_email
-                    : "",
-                ]
-                  .filter(Boolean)
-                  .join(" · ");
-                const summaryLine = [
-                  draft.class_level ? formatClassLabel(draft.class_level) : "",
-                  draft.subjects_needed,
-                ]
-                  .filter(Boolean)
-                  .join(" · ");
-
-                return (
-                  <tr key={call.id}>
+            </thead>
+            <tbody>
+              {filteredEnquiries.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="text-center text-muted-foreground py-8">
+                    No website enquiries match your filter yet.
+                  </td>
+                </tr>
+              ) : (
+                filteredEnquiries.map((item) => (
+                  <tr key={item.id}>
                     <td className="whitespace-nowrap text-xs text-muted-foreground">
-                      {new Date(call.start_datetime).toLocaleString("en-IN", {
-                        day: "numeric",
-                        month: "short",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </td>
-                    <td style={{ maxWidth: 280 }}>
-                      <strong className="text-foreground">{primaryTitle}</strong>
-                      {contactLine && (
-                        <div className="text-xs text-muted-foreground mt-0.5">{contactLine}</div>
-                      )}
-                      {summaryLine && (
-                        <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                          {summaryLine}
-                        </div>
-                      )}
+                      {new Date(item.created_at).toLocaleDateString("en-IN")}
                     </td>
                     <td>
-                      <span
-                        className={`pill-badge ${
-                          call.channel === "sarvam_voice_call" ? "pill-gold" : "pill-green"
-                        }`}
-                      >
-                        {call.channel === "sarvam_voice_call" ? (
-                          <>
-                            <Phone size={11} /> Phone Call
-                          </>
-                        ) : (
-                          <>
-                            <MessageCircle size={11} /> Web Chat
-                          </>
-                        )}
-                      </span>
+                      <strong>{item.name}</strong>
+                      <div className="text-xs text-muted-foreground">{item.email}</div>
                     </td>
                     <td>
-                      <span className="pill-badge">{intentLabel}</span>
-                      <div className="text-[11px] text-muted-foreground mt-1">{langName}</div>
+                      <span className="pill-badge pill-green capitalize">{item.kind}</span>
                     </td>
-                    <td className="whitespace-nowrap text-xs text-muted-foreground">
-                      {formatDuration(call.duration)}
-                    </td>
-                    <td>
-                      <span className={`pill-badge ${isEnrolled ? "pill-green" : ""}`}>
-                        {isEnrolled ? (
-                          <>
-                            <CheckCircle2 size={11} /> Enrolled
-                          </>
-                        ) : (
-                          "Received"
-                        )}
-                      </span>
+                    <td className="text-xs text-muted-foreground" style={{ maxWidth: 420 }}>
+                      {item.details["classLevel"] ? `Class ${item.details["classLevel"]} · ` : ""}
+                      {item.details["subjects"] ? `${item.details["subjects"]} · ` : ""}
+                      {item.details["message"] ?? ""}
                     </td>
                     <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                      <div className="admin-actions">
-                        <button
-                          type="button"
-                          className="admin-action-btn admin-action-btn-secondary"
-                          onClick={() => setActiveCall(call)}
-                        >
-                          <FileText size={13} /> Transcript
-                        </button>
-                        {vars.kind === "student" && !isEnrolled && (
+                      {item.kind === "student" && (
+                        <div className="admin-actions">
                           <button
                             type="button"
                             className="admin-action-btn admin-action-btn-primary"
-                            onClick={() => onRequestEnrollCall(call)}
+                            onClick={() => onRequestEnrollEnquiry(item)}
                           >
                             <UserPlus size={13} /> Enroll
                           </button>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </td>
                   </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : viewFilter === "access_approvals" ? (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Role Requested</th>
+                <th>Status</th>
+                <th>Requested Date</th>
+                <th style={{ textAlign: "right" }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredRoles.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="text-center text-muted-foreground py-8">
+                    No account access requests match your search.
+                  </td>
+                </tr>
+              ) : (
+                filteredRoles.map((r) => (
+                  <tr key={r.id}>
+                    <td>
+                      <strong>{names[r.user_id] || "Unnamed account"}</strong>
+                    </td>
+                    <td>
+                      <span className="pill-badge capitalize">{r.role}</span>
+                    </td>
+                    <td>
+                      <span className={`pill-badge ${r.status === "active" ? "pill-green" : ""}`}>
+                        {r.status === "active" ? "Approved" : r.status}
+                      </span>
+                    </td>
+                    <td className="text-xs text-muted-foreground">
+                      {new Date(r.requested_at).toLocaleDateString("en-IN")}
+                    </td>
+                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                      {r.status === "pending" && (
+                        <div className="admin-actions">
+                          <button
+                            type="button"
+                            className="admin-action-btn admin-action-btn-success"
+                            onClick={() => onReviewRole(r.id, "active")}
+                          >
+                            <Check size={13} /> Approve
+                          </button>
+                          <button
+                            type="button"
+                            className="admin-action-btn admin-action-btn-secondary"
+                            onClick={() => onReviewRole(r.id, "rejected")}
+                          >
+                            <X size={13} /> Reject
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Date &amp; Time</th>
+                <th>Caller &amp; Details</th>
+                <th>Channel</th>
+                <th>Request &amp; Language</th>
+                <th>Duration</th>
+                <th>Status</th>
+                <th style={{ textAlign: "right" }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredCalls.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="text-center text-muted-foreground py-8">
+                    No recent calls match your search.
+                  </td>
+                </tr>
+              ) : (
+                filteredCalls.map((call) => {
+                  const vars = call.output_agent_variables;
+                  const draft = extractStudentDraftFromCall(call);
+                  const langName = formatLanguageLabel(
+                    call.detected_language,
+                    draft.preferred_language,
+                  );
+                  const intentLabel =
+                    vars.kind === "student"
+                      ? "Student Registration"
+                      : vars.kind === "volunteer"
+                        ? "Volunteer"
+                        : "Enquiry";
+                  const isEnrolled =
+                    call.status === "enrolled" ||
+                    enrolledInteractionIds.includes(call.interaction_id);
+
+                  const primaryTitle =
+                    draft.first_name || draft.guardian_phone || draft.guardian_email || vars.name;
+                  const contactLine = [
+                    draft.guardian_phone && draft.guardian_phone !== primaryTitle
+                      ? draft.guardian_phone
+                      : "",
+                    draft.guardian_email && draft.guardian_email !== primaryTitle
+                      ? draft.guardian_email
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ");
+                  const summaryLine = [
+                    draft.class_level ? formatClassLabel(draft.class_level) : "",
+                    draft.subjects_needed,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ");
+
+                  return (
+                    <tr key={call.id}>
+                      <td className="whitespace-nowrap text-xs text-muted-foreground">
+                        {new Date(call.start_datetime).toLocaleString("en-IN", {
+                          day: "numeric",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </td>
+                      <td style={{ maxWidth: 280 }}>
+                        <strong className="text-foreground">{primaryTitle}</strong>
+                        {contactLine && (
+                          <div className="text-xs text-muted-foreground mt-0.5">{contactLine}</div>
+                        )}
+                        {summaryLine && (
+                          <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                            {summaryLine}
+                          </div>
+                        )}
+                      </td>
+                      <td>
+                        <span
+                          className={`pill-badge ${
+                            call.channel === "sarvam_voice_call" ? "pill-gold" : "pill-green"
+                          }`}
+                        >
+                          {call.channel === "sarvam_voice_call" ? (
+                            <>
+                              <Phone size={11} /> Phone Call
+                            </>
+                          ) : (
+                            <>
+                              <MessageCircle size={11} /> Web Chat
+                            </>
+                          )}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="pill-badge">{intentLabel}</span>
+                        <div className="text-[11px] text-muted-foreground mt-1">{langName}</div>
+                      </td>
+                      <td className="whitespace-nowrap text-xs text-muted-foreground">
+                        {formatDuration(call.duration)}
+                      </td>
+                      <td>
+                        <span className={`pill-badge ${isEnrolled ? "pill-green" : ""}`}>
+                          {isEnrolled ? (
+                            <>
+                              <CheckCircle2 size={11} /> Enrolled
+                            </>
+                          ) : (
+                            "Received"
+                          )}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                        <div className="admin-actions">
+                          <button
+                            type="button"
+                            className="admin-action-btn admin-action-btn-secondary"
+                            onClick={() => setActiveCall(call)}
+                          >
+                            <FileText size={13} /> Transcript
+                          </button>
+                          {vars.kind === "student" && !isEnrolled && (
+                            <button
+                              type="button"
+                              className="admin-action-btn admin-action-btn-primary"
+                              onClick={() => onRequestEnrollCall(call)}
+                            >
+                              <UserPlus size={13} /> Enroll
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <AdminModal
         open={Boolean(activeCall)}

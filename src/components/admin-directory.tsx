@@ -1,6 +1,17 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type FormEvent } from "react";
-import { Check, Link2, Mail, PhoneCall, Plus, Sparkles, Trash2, UserPlus, X } from "lucide-react";
+import {
+  CalendarCheck,
+  GraduationCap,
+  Link2,
+  Plus,
+  Search,
+  Sparkles,
+  Trash2,
+  UserCheck,
+  UserPlus,
+  Users,
+} from "lucide-react";
 import { AdminModal } from "@/components/admin-modal";
 import { AdminSarvamCallTracker } from "@/components/admin-sarvam-tracker";
 import { Button } from "@/components/ui/button";
@@ -40,8 +51,6 @@ export function AdminAccessAndEnquiriesPanel({
   onStatus: (msg: string, isErr?: boolean) => void;
 }) {
   const qc = useQueryClient();
-  const [subTab, setSubTab] = useState<"calls" | "inbox">("calls");
-  const [kindFilter, setKindFilter] = useState<"all" | "student" | "volunteer" | "contact">("all");
   const [enrolledInteractionIds, setEnrolledInteractionIds] = useState<string[]>([]);
   const [enrollModalTarget, setEnrollModalTarget] = useState<EnrollModalTarget | null>(null);
   const [enrollError, setEnrollError] = useState("");
@@ -175,11 +184,6 @@ export function AdminAccessAndEnquiriesPanel({
     qc.invalidateQueries({ queryKey: ["admin-dashboard"] });
   }
 
-  const filteredEnquiries = enquiries.filter(
-    (item) => kindFilter === "all" || item.kind === kindFilter,
-  );
-  const nonAdminRoles = roles.filter((r) => r.role !== "admin");
-
   const enrollDraft = enrollModalTarget
     ? enrollModalTarget.source === "call"
       ? extractStudentDraftFromCall(enrollModalTarget.call)
@@ -203,200 +207,22 @@ export function AdminAccessAndEnquiriesPanel({
 
   return (
     <div className="space-y-6">
-      <div className="admin-tabs" role="tablist" aria-label="Calls and enquiries workspace">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={subTab === "calls"}
-          className="tab-btn"
-          onClick={() => setSubTab("calls")}
-        >
-          <PhoneCall size={14} /> Recent Calls &amp; Transcripts (+91 79654 81661)
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={subTab === "inbox"}
-          className="tab-btn"
-          onClick={() => setSubTab("inbox")}
-        >
-          <Mail size={14} /> Website Enquiries &amp; Approvals ({filteredEnquiries.length})
-        </button>
-      </div>
-
-      {subTab === "calls" && (
-        <AdminSarvamCallTracker
-          dbEnquiries={enquiries}
-          enrolledInteractionIds={enrolledInteractionIds}
-          onRequestEnrollCall={(call) => {
-            setEnrollError("");
-            setEnrollModalTarget({ source: "call", call });
-          }}
-        />
-      )}
-
-      {subTab === "inbox" && (
-        <div className="space-y-8">
-          <div>
-            <div className="admin-toolbar">
-              <div>
-                <h2>Account Access Requests ({nonAdminRoles.length})</h2>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Approve or reject mentor and student sign-up requests.
-                </p>
-              </div>
-            </div>
-            <div className="admin-table-wrap">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Role Requested</th>
-                    <th>Status</th>
-                    <th>Requested Date</th>
-                    <th style={{ textAlign: "right" }}>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {nonAdminRoles.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="text-center text-muted-foreground py-8">
-                        No accounts have requested access yet.
-                      </td>
-                    </tr>
-                  ) : (
-                    nonAdminRoles.map((r) => (
-                      <tr key={r.id}>
-                        <td>
-                          <strong>{names[r.user_id] || "Unnamed account"}</strong>
-                        </td>
-                        <td>
-                          <span className="pill-badge capitalize">{r.role}</span>
-                        </td>
-                        <td>
-                          <span
-                            className={`pill-badge ${r.status === "active" ? "pill-green" : ""}`}
-                          >
-                            {r.status === "active" ? "Approved" : r.status}
-                          </span>
-                        </td>
-                        <td className="text-xs text-muted-foreground">
-                          {new Date(r.requested_at).toLocaleDateString("en-IN")}
-                        </td>
-                        <td style={{ textAlign: "right" }}>
-                          {r.status === "pending" && (
-                            <div className="admin-actions">
-                              <button
-                                type="button"
-                                className="admin-action-btn admin-action-btn-success"
-                                onClick={() => review(r.id, "active")}
-                              >
-                                <Check size={13} /> Approve
-                              </button>
-                              <button
-                                type="button"
-                                className="admin-action-btn admin-action-btn-secondary"
-                                onClick={() => review(r.id, "rejected")}
-                              >
-                                <X size={13} /> Reject
-                              </button>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div>
-            <div className="admin-toolbar">
-              <div>
-                <h2>Website Enquiries &amp; Applications ({filteredEnquiries.length})</h2>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Student registrations, volunteer applications, and messages submitted online.
-                </p>
-              </div>
-              <select
-                aria-label="Filter enquiries by type"
-                className="admin-toolbar-select"
-                value={kindFilter}
-                onChange={(e) =>
-                  setKindFilter(e.target.value as "all" | "student" | "volunteer" | "contact")
-                }
-              >
-                <option value="all">All submissions</option>
-                <option value="student">Student registrations</option>
-                <option value="volunteer">Volunteer applications</option>
-                <option value="contact">General contact messages</option>
-              </select>
-            </div>
-
-            <div className="admin-table-wrap">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Name &amp; Email</th>
-                    <th>Type</th>
-                    <th>Details / Message</th>
-                    <th style={{ textAlign: "right" }}>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredEnquiries.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="text-center text-muted-foreground py-8">
-                        No enquiries match this filter yet.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredEnquiries.map((item) => (
-                      <tr key={item.id}>
-                        <td className="whitespace-nowrap text-xs text-muted-foreground">
-                          {new Date(item.created_at).toLocaleDateString("en-IN")}
-                        </td>
-                        <td>
-                          <strong>{item.name}</strong>
-                          <div className="text-xs text-muted-foreground">{item.email}</div>
-                        </td>
-                        <td>
-                          <span className="pill-badge pill-green capitalize">{item.kind}</span>
-                        </td>
-                        <td className="text-xs text-muted-foreground" style={{ maxWidth: 420 }}>
-                          {item.details["classLevel"]
-                            ? `Class ${item.details["classLevel"]} · `
-                            : ""}
-                          {item.details["subjects"] ? `${item.details["subjects"]} · ` : ""}
-                          {item.details["message"] ?? ""}
-                        </td>
-                        <td style={{ textAlign: "right" }}>
-                          {item.kind === "student" && (
-                            <div className="admin-actions">
-                              <button
-                                type="button"
-                                className="admin-action-btn admin-action-btn-primary"
-                                onClick={() => {
-                                  setEnrollError("");
-                                  setEnrollModalTarget({ source: "enquiry", enquiry: item });
-                                }}
-                              >
-                                <UserPlus size={13} /> Enroll
-                              </button>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
+      <AdminSarvamCallTracker
+        dbEnquiries={enquiries}
+        roles={roles}
+        names={names}
+        enrolledInteractionIds={enrolledInteractionIds}
+        onReviewRole={(id, decision) => void review(id, decision)}
+        onRequestEnrollCall={(call) => {
+          setEnrollError("");
+          setEnrollModalTarget({ source: "call", call });
+        }}
+        onRequestEnrollEnquiry={(item) => {
+          setEnrollError("");
+          setEnrollModalTarget({ source: "enquiry", enquiry: item });
+        }}
+        onRefreshAll={() => void qc.invalidateQueries({ queryKey: ["admin-dashboard"] })}
+      />
 
       <AdminModal
         open={Boolean(enrollModalTarget && enrollDraft)}
@@ -591,11 +417,13 @@ export function AdminDatabasePanel({
   onStatus: (msg: string, isErr?: boolean) => void;
 }) {
   const qc = useQueryClient();
-  const [subTab, setSubTab] = useState<"students" | "mentors" | "pairings" | "logs">("students");
+  const [subView, setSubView] = useState<"students" | "mentors" | "pairings" | "logs">("students");
+  const [search, setSearch] = useState("");
   const [modalKind, setModalKind] = useState<"student" | "assign" | null>(null);
 
   const activeMentorRoles = roles.filter((r) => r.role === "mentor" && r.status === "active");
   const activeStudentRoles = roles.filter((r) => r.role === "student" && r.status === "active");
+  const activeStudentsCount = students.filter((s) => s.status === "active").length;
 
   const mentorNameMap = new Map<string, string>();
   for (const r of activeMentorRoles) {
@@ -604,6 +432,35 @@ export function AdminDatabasePanel({
   for (const m of mentors) {
     if (m.full_name) mentorNameMap.set(m.user_id, m.full_name);
   }
+
+  const query = search.trim().toLowerCase();
+  const filteredStudents = students.filter((s) => {
+    if (!query) return true;
+    const text =
+      `${s.first_name} ${s.class_level} ${s.subjects_needed} ${s.guardian_name ?? ""} ${s.guardian_phone ?? ""} ${s.guardian_email} ${s.status}`.toLowerCase();
+    return text.includes(query);
+  });
+  const filteredMentorRoles = activeMentorRoles.filter((role) => {
+    if (!query) return true;
+    const mp = mentors.find((m) => m.user_id === role.user_id);
+    const text =
+      `${mp?.full_name || names[role.user_id] || ""} ${mp?.email ?? ""} ${mp?.subjects ?? ""} ${mp?.qualifications ?? ""}`.toLowerCase();
+    return text.includes(query);
+  });
+  const filteredAssignments = assignments.filter((a) => {
+    if (!query) return true;
+    const st = students.find((s) => s.id === a.student_id);
+    const text =
+      `${mentorNameMap.get(a.mentor_user_id) || ""} ${st?.first_name || ""} ${a.subjects} ${a.schedule_notes ?? ""}`.toLowerCase();
+    return text.includes(query);
+  });
+  const filteredLogs = logs.filter((l) => {
+    if (!query) return true;
+    const st = students.find((s) => s.id === l.student_id);
+    const text =
+      `${l.session_date} ${st?.first_name || ""} ${l.attendance_status} ${l.topic_covered} ${l.remarks ?? ""}`.toLowerCase();
+    return text.includes(query);
+  });
 
   async function addStudent(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -804,43 +661,77 @@ export function AdminDatabasePanel({
 
   return (
     <div className="space-y-6">
-      <div className="admin-toolbar">
-        <div className="admin-tabs">
-          <button
-            type="button"
-            aria-selected={subTab === "students"}
-            className="tab-btn"
-            onClick={() => setSubTab("students")}
-          >
-            Students Roster ({students.length})
-          </button>
-          <button
-            type="button"
-            aria-selected={subTab === "mentors"}
-            className="tab-btn"
-            onClick={() => setSubTab("mentors")}
-          >
-            Approved Mentors ({activeMentorRoles.length})
-          </button>
-          <button
-            type="button"
-            aria-selected={subTab === "pairings"}
-            className="tab-btn"
-            onClick={() => setSubTab("pairings")}
-          >
-            Mentor-Student Pairings ({assignments.length})
-          </button>
-          <button
-            type="button"
-            aria-selected={subTab === "logs"}
-            className="tab-btn"
-            onClick={() => setSubTab("logs")}
-          >
-            Attendance Logs ({logs.length})
-          </button>
-        </div>
+      <div className="stat-cards">
+        <button
+          type="button"
+          className={`stat-card is-clickable ${subView === "students" ? "is-active" : ""}`}
+          onClick={() => setSubView("students")}
+        >
+          <div className="stat-label">
+            <GraduationCap size={14} /> Students Roster
+          </div>
+          <div className="stat-value">{students.length}</div>
+          <small className="stat-note">{activeStudentsCount} active learners</small>
+        </button>
+        <button
+          type="button"
+          className={`stat-card is-clickable ${subView === "mentors" ? "is-active" : ""}`}
+          onClick={() => setSubView("mentors")}
+        >
+          <div className="stat-label">
+            <UserCheck size={14} /> Approved Mentors
+          </div>
+          <div className="stat-value">{activeMentorRoles.length}</div>
+          <small className="stat-note">Verified volunteer teachers</small>
+        </button>
+        <button
+          type="button"
+          className={`stat-card is-clickable ${subView === "pairings" ? "is-active" : ""}`}
+          onClick={() => setSubView("pairings")}
+        >
+          <div className="stat-label">
+            <Users size={14} /> Active Pairings
+          </div>
+          <div className="stat-value">{assignments.length}</div>
+          <small className="stat-note">Mentor–student matches</small>
+        </button>
+        <button
+          type="button"
+          className={`stat-card is-clickable ${subView === "logs" ? "is-active" : ""}`}
+          onClick={() => setSubView("logs")}
+        >
+          <div className="stat-label">
+            <CalendarCheck size={14} /> Attendance Logs
+          </div>
+          <div className="stat-value">{logs.length}</div>
+          <small className="stat-note">Recorded class sessions</small>
+        </button>
+      </div>
 
-        <div className="admin-toolbar-actions">
+      <div className="admin-control-bar">
+        <div className="search-field">
+          <Search size={16} />
+          <input
+            aria-label="Search roster, mentors, pairings, or logs"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search students, mentors, pairings, or logs…"
+          />
+        </div>
+        <select
+          aria-label="Filter roster section"
+          className="admin-control-select"
+          value={subView}
+          onChange={(e) =>
+            setSubView(e.target.value as "students" | "mentors" | "pairings" | "logs")
+          }
+        >
+          <option value="students">Students Roster ({students.length})</option>
+          <option value="mentors">Approved Mentors ({activeMentorRoles.length})</option>
+          <option value="pairings">Mentor–Student Pairings ({assignments.length})</option>
+          <option value="logs">Attendance Logs ({logs.length})</option>
+        </select>
+        <div className="admin-control-actions">
           <button
             type="button"
             className="admin-action-btn admin-action-btn-secondary admin-toolbar-btn"
@@ -858,7 +749,7 @@ export function AdminDatabasePanel({
         </div>
       </div>
 
-      {subTab === "students" && (
+      {subView === "students" && (
         <div className="admin-table-wrap">
           <table className="admin-table">
             <thead>
@@ -873,14 +764,14 @@ export function AdminDatabasePanel({
               </tr>
             </thead>
             <tbody>
-              {students.length === 0 ? (
+              {filteredStudents.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="text-center text-muted-foreground py-8">
-                    No student records created yet.
+                    No student records match your search.
                   </td>
                 </tr>
               ) : (
-                students.map((s) => (
+                filteredStudents.map((s) => (
                   <tr key={s.id}>
                     <td>
                       <strong>{s.first_name}</strong>
@@ -917,9 +808,9 @@ export function AdminDatabasePanel({
                           )
                         }
                       >
-                        <option value="active">active</option>
-                        <option value="paused">paused</option>
-                        <option value="completed">completed</option>
+                        <option value="active">Active</option>
+                        <option value="paused">Paused</option>
+                        <option value="completed">Completed</option>
                       </select>
                     </td>
                     <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
@@ -942,7 +833,7 @@ export function AdminDatabasePanel({
         </div>
       )}
 
-      {subTab === "mentors" && (
+      {subView === "mentors" && (
         <div className="admin-table-wrap">
           <table className="admin-table">
             <thead>
@@ -956,14 +847,14 @@ export function AdminDatabasePanel({
               </tr>
             </thead>
             <tbody>
-              {activeMentorRoles.length === 0 ? (
+              {filteredMentorRoles.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center text-muted-foreground py-8">
-                    No approved mentors yet.
+                    No approved mentors match your search.
                   </td>
                 </tr>
               ) : (
-                activeMentorRoles.map((role) => {
+                filteredMentorRoles.map((role) => {
                   const mp = mentors.find((m) => m.user_id === role.user_id);
                   return (
                     <tr key={role.user_id}>
@@ -988,7 +879,7 @@ export function AdminDatabasePanel({
         </div>
       )}
 
-      {subTab === "pairings" && (
+      {subView === "pairings" && (
         <div className="admin-table-wrap">
           <table className="admin-table">
             <thead>
@@ -1001,14 +892,14 @@ export function AdminDatabasePanel({
               </tr>
             </thead>
             <tbody>
-              {assignments.length === 0 ? (
+              {filteredAssignments.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="text-center text-muted-foreground py-8">
-                    No mentor-student pairings yet. Click &ldquo;Assign Mentor&rdquo; above.
+                    No mentor-student pairings match your search.
                   </td>
                 </tr>
               ) : (
-                assignments.map((a) => {
+                filteredAssignments.map((a) => {
                   const st = students.find((s) => s.id === a.student_id);
                   return (
                     <tr key={a.id}>
@@ -1040,7 +931,7 @@ export function AdminDatabasePanel({
         </div>
       )}
 
-      {subTab === "logs" && (
+      {subView === "logs" && (
         <div className="admin-table-wrap">
           <table className="admin-table">
             <thead>
@@ -1054,14 +945,14 @@ export function AdminDatabasePanel({
               </tr>
             </thead>
             <tbody>
-              {logs.length === 0 ? (
+              {filteredLogs.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center text-muted-foreground py-8">
-                    No mentor session logs yet.
+                    No mentor session logs match your search.
                   </td>
                 </tr>
               ) : (
-                logs.slice(0, 30).map((l) => {
+                filteredLogs.slice(0, 30).map((l) => {
                   const st = students.find((s) => s.id === l.student_id);
                   return (
                     <tr key={l.id}>

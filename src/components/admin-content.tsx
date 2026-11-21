@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import {
   Award,
+  BookOpen,
   Camera,
   CheckCircle2,
   Clock,
@@ -171,25 +172,44 @@ export function AdminLecturesPanel({
     qc.invalidateQueries({ queryKey: ["recorded-lectures"] });
   }
 
+  const publishedCount = lectures.filter((l) => l.is_published).length;
+  const hiddenCount = lectures.length - publishedCount;
+  const uniqueSubjectsCount = new Set(lectures.map((l) => l.subject)).size;
+
   return (
     <div className="space-y-6">
-      <div className="admin-toolbar">
-        <div>
-          <h2>Recorded Lectures ({filtered.length})</h2>
-          <p className="text-xs text-muted-foreground mt-1">
-            Publish, hide, or manage recorded lessons on Learn with Rabata.
-          </p>
-        </div>
-        <button
-          type="button"
-          className="admin-action-btn admin-action-btn-primary admin-toolbar-btn"
-          onClick={() => setShowAddModal(true)}
-        >
-          <Plus size={14} /> Add Recorded Lecture
-        </button>
+      <div className="stat-cards">
+        <article className="stat-card">
+          <div className="stat-label">
+            <Video size={14} /> Total Lectures
+          </div>
+          <div className="stat-value">{lectures.length}</div>
+          <small className="stat-note">Uploaded to studio</small>
+        </article>
+        <article className="stat-card">
+          <div className="stat-label">
+            <CheckCircle2 size={14} /> Published Live
+          </div>
+          <div className="stat-value">{publishedCount}</div>
+          <small className="stat-note">Visible on Learn with Rabata</small>
+        </article>
+        <article className="stat-card">
+          <div className="stat-label">
+            <Clock size={14} /> Hidden Drafts
+          </div>
+          <div className="stat-value">{hiddenCount}</div>
+          <small className="stat-note">Paused from public view</small>
+        </article>
+        <article className="stat-card">
+          <div className="stat-label">
+            <BookOpen size={14} /> Subjects Covered
+          </div>
+          <div className="stat-value">{uniqueSubjectsCount}</div>
+          <small className="stat-note">Across mentor recordings</small>
+        </article>
       </div>
 
-      <div className="filters" style={{ gridTemplateColumns: "2fr 1fr" }}>
+      <div className="admin-control-bar">
         <div className="search-field">
           <Search size={16} />
           <input
@@ -201,35 +221,51 @@ export function AdminLecturesPanel({
         </div>
         <select
           aria-label="Filter by subject"
+          className="admin-control-select"
           value={subjectFilter}
           onChange={(e) => setSubjectFilter(e.target.value)}
         >
-          <option>All subjects</option>
+          <option value="All subjects">All Subjects ({lectures.length})</option>
           {LECTURE_SUBJECTS.map((s) => (
-            <option key={s}>{s}</option>
+            <option key={s} value={s}>
+              {s}
+            </option>
           ))}
         </select>
+        <div className="admin-control-actions">
+          <button
+            type="button"
+            className="admin-action-btn admin-action-btn-primary admin-toolbar-btn"
+            onClick={() => setShowAddModal(true)}
+          >
+            <Plus size={14} /> Add Lecture
+          </button>
+        </div>
       </div>
 
-      {filtered.length === 0 ? (
-        <div className="empty-state">No recorded lectures match your search.</div>
-      ) : (
-        <div className="admin-table-wrap">
-          <table className="admin-table">
-            <thead>
+      <div className="admin-table-wrap">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>Lecture Title</th>
+              <th>Subject</th>
+              <th>Topic</th>
+              <th>Class</th>
+              <th>Instructor</th>
+              <th>Duration</th>
+              <th>Status</th>
+              <th style={{ textAlign: "right" }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
               <tr>
-                <th>Lecture Title</th>
-                <th>Subject</th>
-                <th>Topic</th>
-                <th>Class</th>
-                <th>Instructor</th>
-                <th>Duration</th>
-                <th>Status</th>
-                <th style={{ textAlign: "right" }}>Actions</th>
+                <td colSpan={8} className="text-center text-muted-foreground py-8">
+                  No recorded lectures match your search.
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {filtered.map((l) => (
+            ) : (
+              filtered.map((l) => (
                 <tr key={l.id}>
                   <td>
                     <strong className="text-foreground">{l.title}</strong>
@@ -270,11 +306,11 @@ export function AdminLecturesPanel({
                     </div>
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
 
       <AdminModal
         open={showAddModal}
@@ -372,10 +408,30 @@ export function AdminFundsPanel({
   onStatus: (msg: string, isErr?: boolean) => void;
 }) {
   const qc = useQueryClient();
-  const [subTab, setSubTab] = useState<"allocations" | "donations" | "audit">("allocations");
+  const [subView, setSubView] = useState<"allocations" | "donations" | "audit">("allocations");
+  const [search, setSearch] = useState("");
   const [modalKind, setModalKind] = useState<"donation" | "allocation" | null>(null);
   const [busy, setBusy] = useState(false);
   const summary = calculateFundSummary(donations, allocations);
+
+  const query = search.trim().toLowerCase();
+  const filteredAllocations = allocations.filter((a) => {
+    if (!query) return true;
+    const text =
+      `${a.entry_date} ${a.title} ${a.vendor_or_beneficiary ?? ""} ${a.category} ${a.entry_type}`.toLowerCase();
+    return text.includes(query);
+  });
+  const filteredDonations = donations.filter((d) => {
+    if (!query) return true;
+    const text =
+      `${d.received_date} ${d.donor_name} ${d.donor_email ?? ""} ${d.purpose} ${d.payment_reference ?? ""}`.toLowerCase();
+    return text.includes(query);
+  });
+  const filteredAuditLogs = auditLogs.filter((log) => {
+    if (!query) return true;
+    const text = `${log.action} ${log.summary}`.toLowerCase();
+    return text.includes(query);
+  });
 
   async function logAudit(
     action: string,
@@ -608,20 +664,28 @@ export function AdminFundsPanel({
   return (
     <div className="space-y-6">
       <div className="stat-cards">
-        <article className="stat-card">
+        <button
+          type="button"
+          className={`stat-card is-clickable ${subView === "donations" ? "is-active" : ""}`}
+          onClick={() => setSubView("donations")}
+        >
           <div className="stat-label">
             <IndianRupee size={14} /> Received
           </div>
           <div className="stat-value">{formatINR(summary.totalReceivedInr)}</div>
           <small className="stat-note">{donations.length} logged contributions</small>
-        </article>
-        <article className="stat-card">
+        </button>
+        <button
+          type="button"
+          className={`stat-card is-clickable ${subView === "allocations" ? "is-active" : ""}`}
+          onClick={() => setSubView("allocations")}
+        >
           <div className="stat-label">
             <Receipt size={14} /> Spent
           </div>
           <div className="stat-value">{formatINR(summary.totalSpentInr)}</div>
           <small className="stat-note">With public receipts &amp; proofs</small>
-        </article>
+        </button>
         <article className="stat-card">
           <div className="stat-label">
             <CheckCircle2 size={14} /> Available Balance
@@ -629,44 +693,40 @@ export function AdminFundsPanel({
           <div className="stat-value">{formatINR(summary.availableBalanceInr)}</div>
           <small className="stat-note">Ready for upcoming student needs</small>
         </article>
-        <article className="stat-card">
+        <button
+          type="button"
+          className={`stat-card is-clickable ${subView === "audit" ? "is-active" : ""}`}
+          onClick={() => setSubView("audit")}
+        >
           <div className="stat-label">
             <Clock size={14} /> Planned
           </div>
           <div className="stat-value">{formatINR(summary.totalPlannedInr)}</div>
-          <small className="stat-note">Upcoming earmarked allocations</small>
-        </article>
+          <small className="stat-note">{auditLogs.length} audit trail entries</small>
+        </button>
       </div>
 
-      <div className="admin-toolbar">
-        <div className="admin-tabs">
-          <button
-            type="button"
-            aria-selected={subTab === "allocations"}
-            className="tab-btn"
-            onClick={() => setSubTab("allocations")}
-          >
-            Expenses &amp; Allocations ({allocations.length})
-          </button>
-          <button
-            type="button"
-            aria-selected={subTab === "donations"}
-            className="tab-btn"
-            onClick={() => setSubTab("donations")}
-          >
-            Received Donations ({donations.length})
-          </button>
-          <button
-            type="button"
-            aria-selected={subTab === "audit"}
-            className="tab-btn"
-            onClick={() => setSubTab("audit")}
-          >
-            Audit Trail ({auditLogs.length})
-          </button>
+      <div className="admin-control-bar">
+        <div className="search-field">
+          <Search size={16} />
+          <input
+            aria-label="Search expenses, donors, categories, or audit trail"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search expenses, donors, categories, or audit trail…"
+          />
         </div>
-
-        <div className="admin-toolbar-actions">
+        <select
+          aria-label="Filter fund ledger section"
+          className="admin-control-select"
+          value={subView}
+          onChange={(e) => setSubView(e.target.value as "allocations" | "donations" | "audit")}
+        >
+          <option value="allocations">Expenses &amp; Allocations ({allocations.length})</option>
+          <option value="donations">Received Donations ({donations.length})</option>
+          <option value="audit">Audit Trail ({auditLogs.length})</option>
+        </select>
+        <div className="admin-control-actions">
           <button
             type="button"
             className="admin-action-btn admin-action-btn-secondary admin-toolbar-btn"
@@ -679,12 +739,12 @@ export function AdminFundsPanel({
             className="admin-action-btn admin-action-btn-primary admin-toolbar-btn"
             onClick={() => setModalKind("allocation")}
           >
-            <Plus size={14} /> Add Expense / Proof
+            <Plus size={14} /> Add Expense
           </button>
         </div>
       </div>
 
-      {subTab === "allocations" && (
+      {subView === "allocations" && (
         <div className="admin-table-wrap">
           <table className="admin-table">
             <thead>
@@ -699,14 +759,14 @@ export function AdminFundsPanel({
               </tr>
             </thead>
             <tbody>
-              {allocations.length === 0 ? (
+              {filteredAllocations.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="text-center text-muted-foreground py-8">
-                    No fund allocations recorded yet.
+                    No fund allocations match your search.
                   </td>
                 </tr>
               ) : (
-                allocations.map((a) => (
+                filteredAllocations.map((a) => (
                   <tr key={a.id}>
                     <td className="whitespace-nowrap text-xs text-muted-foreground">
                       {a.entry_date}
@@ -766,7 +826,7 @@ export function AdminFundsPanel({
         </div>
       )}
 
-      {subTab === "donations" && (
+      {subView === "donations" && (
         <div className="admin-table-wrap">
           <table className="admin-table">
             <thead>
@@ -780,14 +840,14 @@ export function AdminFundsPanel({
               </tr>
             </thead>
             <tbody>
-              {donations.length === 0 ? (
+              {filteredDonations.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center text-muted-foreground py-8">
-                    No donations recorded yet.
+                    No donations match your search.
                   </td>
                 </tr>
               ) : (
-                donations.map((d) => (
+                filteredDonations.map((d) => (
                   <tr key={d.id}>
                     <td className="whitespace-nowrap text-xs text-muted-foreground">
                       {d.received_date}
@@ -818,7 +878,7 @@ export function AdminFundsPanel({
         </div>
       )}
 
-      {subTab === "audit" && (
+      {subView === "audit" && (
         <div className="admin-table-wrap">
           <table className="admin-table">
             <thead>
@@ -829,14 +889,14 @@ export function AdminFundsPanel({
               </tr>
             </thead>
             <tbody>
-              {auditLogs.length === 0 ? (
+              {filteredAuditLogs.length === 0 ? (
                 <tr>
                   <td colSpan={3} className="text-center text-muted-foreground py-8">
-                    No audit trail entries recorded yet.
+                    No audit trail entries match your search.
                   </td>
                 </tr>
               ) : (
-                auditLogs.slice(0, 30).map((log) => (
+                filteredAuditLogs.slice(0, 30).map((log) => (
                   <tr key={log.id}>
                     <td className="whitespace-nowrap text-xs text-muted-foreground">
                       {new Date(log.created_at).toLocaleString("en-IN")}
@@ -1040,7 +1100,8 @@ export function AdminStoriesAndPhotosPanel({
   onStatus: (msg: string, isErr?: boolean) => void;
 }) {
   const qc = useQueryClient();
-  const [subTab, setSubTab] = useState<"stories" | "photos">("stories");
+  const [subView, setSubView] = useState<"stories" | "photos">("stories");
+  const [search, setSearch] = useState("");
   const [modalKind, setModalKind] = useState<"story" | "photo" | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -1285,47 +1346,102 @@ export function AdminStoriesAndPhotosPanel({
     qc.invalidateQueries({ queryKey: ["home-activity-photos"] });
   }
 
+  const publishedStoriesCount = stories.filter((s) => s.is_published).length;
+  const publishedPhotosCount = photos.filter((p) => p.is_published).length;
+  const publishedTotalCount = publishedStoriesCount + publishedPhotosCount;
+  const hiddenTotalCount = stories.length + photos.length - publishedTotalCount;
+
+  const query = search.trim().toLowerCase();
+  const filteredStories = stories.filter((s) => {
+    if (!query) return true;
+    const text = `${s.title} ${s.learner_display_name} ${s.focus_area}`.toLowerCase();
+    return text.includes(query);
+  });
+  const filteredPhotos = photos.filter((p) => {
+    if (!query) return true;
+    const text = `${p.title} ${p.category} ${p.caption}`.toLowerCase();
+    return text.includes(query);
+  });
+
   return (
     <div className="space-y-6">
-      <div className="admin-toolbar">
-        <div className="admin-tabs">
-          <button
-            type="button"
-            aria-selected={subTab === "stories"}
-            className="tab-btn"
-            onClick={() => setSubTab("stories")}
-          >
-            Success Stories ({stories.length})
-          </button>
-          <button
-            type="button"
-            aria-selected={subTab === "photos"}
-            className="tab-btn"
-            onClick={() => setSubTab("photos")}
-          >
-            Homepage Gallery Photos ({photos.length})
-          </button>
-        </div>
+      <div className="stat-cards">
+        <button
+          type="button"
+          className={`stat-card is-clickable ${subView === "stories" ? "is-active" : ""}`}
+          onClick={() => setSubView("stories")}
+        >
+          <div className="stat-label">
+            <Award size={14} /> Success Stories
+          </div>
+          <div className="stat-value">{stories.length}</div>
+          <small className="stat-note">{publishedStoriesCount} published live</small>
+        </button>
+        <button
+          type="button"
+          className={`stat-card is-clickable ${subView === "photos" ? "is-active" : ""}`}
+          onClick={() => setSubView("photos")}
+        >
+          <div className="stat-label">
+            <Camera size={14} /> Gallery Photos
+          </div>
+          <div className="stat-value">{photos.length}</div>
+          <small className="stat-note">{publishedPhotosCount} shown on homepage</small>
+        </button>
+        <article className="stat-card">
+          <div className="stat-label">
+            <CheckCircle2 size={14} /> Published Live
+          </div>
+          <div className="stat-value">{publishedTotalCount}</div>
+          <small className="stat-note">Visible on public site</small>
+        </article>
+        <article className="stat-card">
+          <div className="stat-label">
+            <Clock size={14} /> Hidden Items
+          </div>
+          <div className="stat-value">{hiddenTotalCount}</div>
+          <small className="stat-note">Paused from public view</small>
+        </article>
+      </div>
 
-        <div className="admin-toolbar-actions">
+      <div className="admin-control-bar">
+        <div className="search-field">
+          <Search size={16} />
+          <input
+            aria-label="Search stories or gallery photos"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search stories or gallery photos…"
+          />
+        </div>
+        <select
+          aria-label="Filter stories and gallery section"
+          className="admin-control-select"
+          value={subView}
+          onChange={(e) => setSubView(e.target.value as "stories" | "photos")}
+        >
+          <option value="stories">Success Stories ({stories.length})</option>
+          <option value="photos">Homepage Gallery Photos ({photos.length})</option>
+        </select>
+        <div className="admin-control-actions">
           <button
             type="button"
             className="admin-action-btn admin-action-btn-secondary admin-toolbar-btn"
             onClick={() => setModalKind("photo")}
           >
-            <Camera size={14} /> Upload Gallery Photo
+            <Camera size={14} /> Upload Photo
           </button>
           <button
             type="button"
             className="admin-action-btn admin-action-btn-primary admin-toolbar-btn"
             onClick={() => setModalKind("story")}
           >
-            <Plus size={14} /> Add Success Story
+            <Plus size={14} /> Add Story
           </button>
         </div>
       </div>
 
-      {subTab === "stories" && (
+      {subView === "stories" && (
         <div className="admin-table-wrap">
           <table className="admin-table">
             <thead>
@@ -1339,14 +1455,14 @@ export function AdminStoriesAndPhotosPanel({
               </tr>
             </thead>
             <tbody>
-              {stories.length === 0 ? (
+              {filteredStories.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center text-muted-foreground py-8">
-                    No custom success stories added yet.
+                    No success stories match your search.
                   </td>
                 </tr>
               ) : (
-                stories.map((s) => (
+                filteredStories.map((s) => (
                   <tr key={s.id}>
                     <td>
                       <strong>{s.title}</strong>
@@ -1392,7 +1508,7 @@ export function AdminStoriesAndPhotosPanel({
         </div>
       )}
 
-      {subTab === "photos" && (
+      {subView === "photos" && (
         <div className="admin-table-wrap">
           <table className="admin-table">
             <thead>
@@ -1406,12 +1522,16 @@ export function AdminStoriesAndPhotosPanel({
               </tr>
             </thead>
             <tbody>
-              {photos.length === 0 ? (
+              {filteredPhotos.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center text-muted-foreground py-8">
                     <div className="flex flex-col items-center gap-3">
-                      <span>No homepage gallery photos yet.</span>
-                      {shouldUseLocalMode() && (
+                      <span>
+                        {photos.length === 0
+                          ? "No homepage gallery photos yet."
+                          : "No homepage gallery photos match your search."}
+                      </span>
+                      {photos.length === 0 && shouldUseLocalMode() && (
                         <button
                           type="button"
                           className="admin-action-btn admin-action-btn-secondary"
@@ -1424,7 +1544,7 @@ export function AdminStoriesAndPhotosPanel({
                   </td>
                 </tr>
               ) : (
-                photos.map((p) => (
+                filteredPhotos.map((p) => (
                   <tr key={p.id}>
                     <td>
                       <img

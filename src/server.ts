@@ -2,12 +2,14 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
-import { ENGLISH_TUTOR_SYSTEM_PROMPT } from "./lib/english-tutor";
 import {
   normalizeSarvamWebhookObject,
   RABATA_SARVAM_SYSTEM_PROMPT,
   type SarvamCallRecord,
 } from "./lib/sarvam-agent";
+import { buildSignedVoiceWsUrl } from "./lib/sarvam-voice-client";
+
+const DEFAULT_ENGLISH_TUTOR_APP_ID = "English-Bud-5427078a-fa90";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -278,87 +280,86 @@ async function handleApiRoute(request: Request): Promise<Response | null> {
   }
 
   if (path === "/api/english-tutor/config" && request.method === "GET") {
-    const tutorAppId = await getServerEnv("SARVAM_TUTOR_APP_ID");
+    const apiKey =
+      (await getServerEnv("SARVAM_SAMVAAD_API_KEY")) || (await getServerEnv("SARVAM_API_KEY"));
+    const orgId = await getServerEnv("SARVAM_ORG_ID");
+    const workspaceId = await getServerEnv("SARVAM_WORKSPACE_ID");
+    const tutorAppId = (await getServerEnv("SARVAM_TUTOR_APP_ID")) || DEFAULT_ENGLISH_TUTOR_APP_ID;
     return jsonResponse({
       ok: true,
-      tutorAgentConfigured: Boolean(tutorAppId),
-      tutorAppId: tutorAppId || null,
+      tutorAgentConfigured: Boolean(apiKey && orgId && workspaceId && tutorAppId),
+      tutorAppId,
     });
   }
 
-  if (path === "/api/english-tutor" && request.method === "POST") {
-    const rawKey =
-      (await getServerEnv("SARVAM_CHAT_API_KEY")) || (await getServerEnv("SARVAM_API_KEY"));
-    if (!rawKey || rawKey.startsWith("sk_sam")) {
-      return jsonResponse({ ok: false, mode: "local_fallback" }, 200);
+  if (path === "/api/english-tutor/session" && request.method === "POST") {
+    const apiKey =
+      (await getServerEnv("SARVAM_SAMVAAD_API_KEY")) || (await getServerEnv("SARVAM_API_KEY"));
+    const orgId = await getServerEnv("SARVAM_ORG_ID");
+    const workspaceId = await getServerEnv("SARVAM_WORKSPACE_ID");
+    const tutorAppId = (await getServerEnv("SARVAM_TUTOR_APP_ID")) || DEFAULT_ENGLISH_TUTOR_APP_ID;
+
+    if (!apiKey || !orgId || !workspaceId || !tutorAppId) {
+      return jsonResponse(
+        { ok: false, error: "Voice practice partner is not configured on this server." },
+        503,
+      );
     }
+
     try {
-      const body = (await request.json()) as {
-        messages?: Array<{ role: "user" | "assistant"; content: string }>;
-      };
-      const chatMessages = [
-        { role: "system", content: ENGLISH_TUTOR_SYSTEM_PROMPT },
-        ...(body.messages ?? []).slice(-12),
-      ];
-      const chatModel = (await getServerEnv("SARVAM_CHAT_MODEL")) || "sarvam-105b";
-      const res = await fetch("https://api.sarvam.ai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "api-subscription-key": rawKey,
-        },
-        body: JSON.stringify({
-          model: chatModel,
-          messages: chatMessages,
-          temperature: 0.65,
-          max_tokens: 320,
-        }),
+      const runtimeUrl = new URL(
+        `https://apps.sarvam.ai/api/app-runtime/orgs/${encodeURIComponent(orgId)}/workspaces/${encodeURIComponent(workspaceId)}/apps/${encodeURIComponent(tutorAppId)}/url`,
+      );
+      runtimeUrl.searchParams.set("interaction_type", "call");
+
+      const upstream = await fetch(runtimeUrl.toString(), {
+        headers: { "X-API-Key": apiKey },
       });
-      if (!res.ok) {
-        return jsonResponse({ ok: false, mode: "local_fallback" }, 200);
+
+      if (!upstream.ok) {
+        console.error(
+          `[English Tutor Session] Sarvam runtime error ${upstream.status} for app ${tutorAppId}`,
+        );
+        return jsonResponse(
+          { ok: false, error: "Could not start voice session right now. Please try again." },
+          502,
+        );
       }
-      const json = (await res.json()) as {
-        choices?: Array<{ message?: { content?: string } }>;
+
+      const payload = (await upstream.json()) as {
+        url?: unknown;
+        reference_id?: unknown;
+        expires_at?: unknown;
       };
-      const rawContent = json.choices?.[0]?.message?.content?.trim();
-      if (!rawContent) {
-        return jsonResponse({ ok: false, mode: "local_fallback" }, 200);
+      if (typeof payload.url !== "string" || !payload.url.startsWith("wss://")) {
+        console.error("[English Tutor Session] Invalid signed URL returned from Sarvam runtime");
+        return jsonResponse(
+          { ok: false, error: "Could not start voice session right now. Please try again." },
+          502,
+        );
       }
-      try {
-        const stripped = rawContent
-          .replace(/^```json\s*/i, "")
-          .replace(/^```\s*/i, "")
-          .replace(/\s*```$/i, "")
-          .trim();
-        const parsed = JSON.parse(stripped) as {
-          reply?: unknown;
-          correction?: { original?: unknown; better?: unknown; tip?: unknown } | null;
-        };
-        const replyText = typeof parsed.reply === "string" ? parsed.reply.trim() : rawContent;
-        const corr = parsed.correction;
-        const validCorrection =
-          corr &&
-          typeof corr.original === "string" &&
-          typeof corr.better === "string" &&
-          corr.original.trim() &&
-          corr.better.trim()
-            ? {
-                original: corr.original.trim(),
-                better: corr.better.trim(),
-                tip: typeof corr.tip === "string" ? corr.tip.trim() : "",
-              }
-            : undefined;
-        return jsonResponse({
-          ok: true,
-          mode: "sarvam_api",
-          reply: replyText,
-          ...(validCorrection ? { correction: validCorrection } : {}),
-        });
-      } catch {
-        return jsonResponse({ ok: true, mode: "sarvam_api", reply: rawContent });
-      }
-    } catch {
-      return jsonResponse({ ok: false, mode: "local_fallback" }, 200);
+
+      const signedWsUrl = buildSignedVoiceWsUrl(payload.url, {
+        userIdentifier: `rabata-learner-${crypto.randomUUID()}`,
+        inputSampleRate: 16000,
+        outputSampleRate: 16000,
+      });
+
+      return jsonResponse({
+        ok: true,
+        wsUrl: signedWsUrl,
+        referenceId: typeof payload.reference_id === "string" ? payload.reference_id : null,
+        expiresAt: payload.expires_at ?? null,
+        appId: tutorAppId,
+        inputSampleRate: 16000,
+        outputSampleRate: 16000,
+      });
+    } catch (err) {
+      console.error("[English Tutor Session]", err);
+      return jsonResponse(
+        { ok: false, error: "Could not start voice session right now. Please try again." },
+        502,
+      );
     }
   }
 
@@ -437,6 +438,8 @@ function isH3SwallowedErrorBody(body: string): boolean {
     return false;
   }
 }
+
+export { handleApiRoute };
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {

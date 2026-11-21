@@ -12,7 +12,13 @@ import {
   parseSarvamWebhookPayload,
   RABATA_SARVAM_SYSTEM_PROMPT,
 } from "@/lib/sarvam-agent";
-import { detectEnglishCorrection, generateEnglishTutorReply } from "@/lib/english-tutor";
+import {
+  buildSignedVoiceWsUrl,
+  computePcmRms,
+  float32ToInt16Pcm,
+  int16PcmToFloat32,
+  resampleFloat32,
+} from "@/lib/sarvam-voice-client";
 import { site } from "@/lib/site";
 import { resources } from "@/lib/resources";
 import {
@@ -436,24 +442,40 @@ describe("Platform helpers", () => {
     }
   });
 
-  it("provides friendly English speaking tutor replies with gentle grammar corrections and conversational chatbot small talk", () => {
-    const intro = generateEnglishTutorReply("Myself Rohan and I live in Derabassi", []);
-    expect(intro.correction?.original).toBe("Myself Rohan");
-    expect(intro.correction?.better).toBe("My name is Rohan");
-    expect(intro.reply.length).toBeGreaterThan(15);
-
-    const pastTense = detectEnglishCorrection("I am going to school yesterday");
-    expect(pastTense?.better).toBe("I went to school yesterday");
-
-    const didntCheck = detectEnglishCorrection("I didn't went to the market");
-    expect(didntCheck?.better).toBe("didn't go");
-
-    const cleanTopic = generateEnglishTutorReply(
-      "I watched a cricket match with my friends today",
-      [],
+  it("builds signed voice agent WebSocket URLs and encodes/resamples 16kHz PCM audio accurately", () => {
+    const signed = buildSignedVoiceWsUrl(
+      "wss://apps.sarvam.ai/api/runtime/ws?token=abc123&sig=xyz",
+      {
+        userIdentifier: "rabata-learner-42",
+        inputSampleRate: 16000,
+        outputSampleRate: 16000,
+      },
     );
-    expect(cleanTopic.correction).toBeUndefined();
-    expect(cleanTopic.reply.toLowerCase()).toMatch(/favorite|watched|played|enjoy|\?/);
+    const parsed = new URL(signed);
+    expect(parsed.searchParams.get("token")).toBe("abc123");
+    expect(parsed.searchParams.get("sig")).toBe("xyz");
+    expect(parsed.searchParams.get("user_identifier")).toBe("rabata-learner-42");
+    expect(parsed.searchParams.get("user_identifier_type")).toBe("custom");
+    expect(parsed.searchParams.get("input_sample_rate")).toBe("16000");
+    expect(parsed.searchParams.get("output_sample_rate")).toBe("16000");
+    expect(parsed.searchParams.get("interaction_type")).toBe("call");
+
+    const silence = new Uint8Array(960);
+    expect(computePcmRms(silence)).toBe(0);
+
+    const tone = new Float32Array(480).fill(0.5);
+    const encoded = float32ToInt16Pcm(tone);
+    expect(encoded.byteLength).toBe(960);
+    expect(computePcmRms(encoded)).toBeGreaterThan(0.45);
+
+    const decoded = int16PcmToFloat32(encoded);
+    expect(decoded).toHaveLength(480);
+    expect(decoded[0]).toBeCloseTo(0.5, 2);
+
+    const src48k = new Float32Array(4800).fill(0.25);
+    const dst16k = resampleFloat32(src48k, 48000, 16000);
+    expect(dst16k).toHaveLength(1600);
+    expect(dst16k[100]).toBeCloseTo(0.25, 4);
 
     const chatState = createInitialChatSession("en");
     const smallTalk = generateRabataAgentReply("How are you?", chatState, "en");

@@ -61,6 +61,9 @@ export function AdminExecutiveOverview({
   onNavigate: (section: AdminSectionId) => void;
   onOpenStudent: (studentId: string) => void;
 }) {
+  const [search, setSearch] = useState("");
+  const [tierFilter, setTierFilter] = useState("All Tiers");
+
   const fundSummary = calculateFundSummary(donations, allocations);
   const activeMentors = roles.filter((r) => r.role === "mentor" && r.status === "active").length;
   const pendingRequests = roles.filter((r) => r.status === "pending").length;
@@ -78,8 +81,16 @@ export function AdminExecutiveOverview({
         )
       : 0;
 
+  const filteredSnapshot = academicProfiles.filter((st) => {
+    const q = search.trim().toLowerCase();
+    const matchesSearch =
+      !q || `${st.fullName} ${st.studentCode} ${st.classGrade}`.toLowerCase().includes(q);
+    const matchesTier = tierFilter === "All Tiers" || st.progressTier === tierFilter;
+    return matchesSearch && matchesTier;
+  });
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="stat-cards">
         <article className="stat-card">
           <div className="stat-label">
@@ -123,64 +134,93 @@ export function AdminExecutiveOverview({
         </article>
       </div>
 
-      <section>
-        <div className="admin-toolbar">
-          <h2>Student Progress Snapshot</h2>
-          <button type="button" className="text-link" onClick={() => onNavigate("academics")}>
-            Open full directory <ArrowRight size={14} />
+      <div className="admin-control-bar">
+        <div className="search-field">
+          <Search size={16} />
+          <input
+            aria-label="Search student progress snapshot"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search students by name, ID, or class…"
+          />
+        </div>
+        <select
+          aria-label="Filter student snapshot by tier"
+          className="admin-control-select"
+          value={tierFilter}
+          onChange={(e) => setTierFilter(e.target.value)}
+        >
+          <option value="All Tiers">All Tiers ({academicProfiles.length})</option>
+          <option value="Excellent">Excellent</option>
+          <option value="Good">Good</option>
+          <option value="Developing">Developing</option>
+          <option value="Needs Support">Needs Support</option>
+        </select>
+        <div className="admin-control-actions">
+          <button
+            type="button"
+            className="admin-action-btn admin-action-btn-secondary admin-toolbar-btn"
+            onClick={() => onNavigate("academics")}
+          >
+            Open Directory <ArrowRight size={14} />
           </button>
         </div>
-        {academicProfiles.length === 0 ? (
-          <div className="empty-state">No student academic profiles created yet.</div>
-        ) : (
-          <div className="admin-table-wrap">
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>Student ID</th>
-                  <th>Name</th>
-                  <th>Class</th>
-                  <th>Academic Avg</th>
-                  <th>Attendance</th>
-                  <th>Tier</th>
-                  <th style={{ textAlign: "right" }}>Action</th>
+      </div>
+
+      <div className="admin-table-wrap">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>Student ID</th>
+              <th>Name</th>
+              <th>Class</th>
+              <th>Academic Avg</th>
+              <th>Attendance</th>
+              <th>Tier</th>
+              <th style={{ textAlign: "right" }}>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredSnapshot.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="text-center text-muted-foreground py-8">
+                  No student academic profiles match your filter.
+                </td>
+              </tr>
+            ) : (
+              filteredSnapshot.slice(0, 6).map((st) => (
+                <tr key={st.studentId}>
+                  <td className="whitespace-nowrap">
+                    <span className="pill-badge pill-green">{st.studentCode}</span>
+                  </td>
+                  <td>
+                    <strong>{st.fullName}</strong>
+                  </td>
+                  <td className="whitespace-nowrap text-xs text-muted-foreground">
+                    {formatClassLabel(st.classGrade)}
+                  </td>
+                  <td className="whitespace-nowrap">
+                    <strong>{st.overallPercentage}%</strong>
+                  </td>
+                  <td className="whitespace-nowrap">{st.attendancePercentage}%</td>
+                  <td className="whitespace-nowrap">
+                    <span className="pill-badge">{st.progressTier}</span>
+                  </td>
+                  <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                    <button
+                      type="button"
+                      className="admin-action-btn admin-action-btn-secondary"
+                      onClick={() => onOpenStudent(st.studentId)}
+                    >
+                      Open <ArrowRight size={13} />
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {academicProfiles.slice(0, 6).map((st) => (
-                  <tr key={st.studentId}>
-                    <td className="whitespace-nowrap">
-                      <span className="pill-badge pill-green">{st.studentCode}</span>
-                    </td>
-                    <td>
-                      <strong>{st.fullName}</strong>
-                    </td>
-                    <td className="whitespace-nowrap text-xs text-muted-foreground">
-                      {formatClassLabel(st.classGrade)}
-                    </td>
-                    <td className="whitespace-nowrap">
-                      <strong>{st.overallPercentage}%</strong>
-                    </td>
-                    <td className="whitespace-nowrap">{st.attendancePercentage}%</td>
-                    <td className="whitespace-nowrap">
-                      <span className="pill-badge">{st.progressTier}</span>
-                    </td>
-                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                      <button
-                        type="button"
-                        className="admin-action-btn admin-action-btn-secondary"
-                        onClick={() => onOpenStudent(st.studentId)}
-                      >
-                        Open <ArrowRight size={13} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-2 items-stretch">
         <section className="admin-panel-card">
@@ -288,7 +328,6 @@ export function AdminEmbeddedAcademicsPanel({
   const [busy, setBusy] = useState(false);
 
   const selected = profiles.find((p) => p.studentId === selectedId) ?? null;
-  const classOptions = ["All classes", ...Array.from(new Set(profiles.map((p) => p.classGrade)))];
 
   const filtered = profiles.filter((p) => {
     const hay = `${p.fullName} ${p.studentCode} ${p.schoolName}`.toLowerCase();
@@ -362,25 +401,54 @@ export function AdminEmbeddedAcademicsPanel({
     );
   }
 
+  const avgAcademic =
+    profiles.length > 0
+      ? Math.round(profiles.reduce((s, p) => s + p.overallPercentage, 0) / profiles.length)
+      : 0;
+  const avgAttendance =
+    profiles.length > 0
+      ? Math.round(profiles.reduce((s, p) => s + p.attendancePercentage, 0) / profiles.length)
+      : 0;
+  const needsSupportCount = profiles.filter((p) => p.progressTier === "Needs Support").length;
+  const strongCount = profiles.filter(
+    (p) => p.progressTier === "Good" || p.progressTier === "Excellent",
+  ).length;
+  const distinctClasses = Array.from(new Set(profiles.map((p) => p.classGrade)));
+
   return (
     <div className="space-y-6">
-      <div className="admin-toolbar">
-        <div>
-          <h2>Student Academic Profiles ({filtered.length})</h2>
-          <p className="text-xs text-muted-foreground mt-1">
-            Select Manage on any learner to edit marks, attendance, skills, or download PDF reports.
-          </p>
-        </div>
-        <button
-          type="button"
-          className="admin-action-btn admin-action-btn-primary admin-toolbar-btn"
-          onClick={() => setShowAddModal(true)}
-        >
-          <Plus size={14} /> Register New Student
-        </button>
+      <div className="stat-cards">
+        <article className="stat-card">
+          <div className="stat-label">
+            <GraduationCap size={14} /> Total Students
+          </div>
+          <div className="stat-value">{profiles.length}</div>
+          <small className="stat-note">Active academic profiles</small>
+        </article>
+        <article className="stat-card">
+          <div className="stat-label">
+            <Award size={14} /> Average Score
+          </div>
+          <div className="stat-value">{avgAcademic}%</div>
+          <small className="stat-note">Across recorded assessments</small>
+        </article>
+        <article className="stat-card">
+          <div className="stat-label">
+            <CheckCircle2 size={14} /> Average Attendance
+          </div>
+          <div className="stat-value">{avgAttendance}%</div>
+          <small className="stat-note">Across logged sessions</small>
+        </article>
+        <article className="stat-card">
+          <div className="stat-label">
+            <UserPlus size={14} /> Needs Support
+          </div>
+          <div className="stat-value">{needsSupportCount}</div>
+          <small className="stat-note">{strongCount} Good or Excellent</small>
+        </article>
       </div>
 
-      <div className="filters" style={{ gridTemplateColumns: "2fr 1fr" }}>
+      <div className="admin-control-bar">
         <div className="search-field">
           <Search size={16} />
           <input
@@ -392,34 +460,51 @@ export function AdminEmbeddedAcademicsPanel({
         </div>
         <select
           aria-label="Filter by class"
+          className="admin-control-select"
           value={classFilter}
           onChange={(e) => setClassFilter(e.target.value)}
         >
-          {classOptions.map((c) => (
-            <option key={c}>{c}</option>
+          <option value="All classes">All Classes ({profiles.length})</option>
+          {distinctClasses.map((c) => (
+            <option key={c} value={c}>
+              {formatClassLabel(c)}
+            </option>
           ))}
         </select>
+        <div className="admin-control-actions">
+          <button
+            type="button"
+            className="admin-action-btn admin-action-btn-primary admin-toolbar-btn"
+            onClick={() => setShowAddModal(true)}
+          >
+            <Plus size={14} /> Register New Student
+          </button>
+        </div>
       </div>
 
-      {filtered.length === 0 ? (
-        <div className="empty-state">No student academic profiles match your filter.</div>
-      ) : (
-        <div className="admin-table-wrap">
-          <table className="admin-table">
-            <thead>
+      <div className="admin-table-wrap">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>Student ID</th>
+              <th>Student Name</th>
+              <th>Class</th>
+              <th>School</th>
+              <th>Academic Avg</th>
+              <th>Attendance</th>
+              <th>Tier</th>
+              <th style={{ textAlign: "right" }}>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
               <tr>
-                <th>Student ID</th>
-                <th>Student Name</th>
-                <th>Class</th>
-                <th>School</th>
-                <th>Academic Avg</th>
-                <th>Attendance</th>
-                <th>Tier</th>
-                <th style={{ textAlign: "right" }}>Action</th>
+                <td colSpan={8} className="text-center text-muted-foreground py-8">
+                  No student academic profiles match your filter.
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {filtered.map((st) => (
+            ) : (
+              filtered.map((st) => (
                 <tr key={st.studentId}>
                   <td className="whitespace-nowrap">
                     <span className="pill-badge pill-green">{st.studentCode}</span>
@@ -448,11 +533,11 @@ export function AdminEmbeddedAcademicsPanel({
                     </button>
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
 
       <AdminModal
         open={showAddModal}
