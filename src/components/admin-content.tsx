@@ -9,6 +9,7 @@ import {
   IndianRupee,
   Plus,
   Receipt,
+  RotateCcw,
   Search,
   Trash2,
   Video,
@@ -20,6 +21,7 @@ import { makeLocalId, shouldUseLocalMode, updateLocalDb } from "@/lib/local-stor
 import {
   calculateFundSummary,
   CLASS_LEVELS,
+  DEFAULT_ACTIVITY_PHOTOS,
   extractYouTubeId,
   formatClassLabel,
   formatINR,
@@ -1193,6 +1195,65 @@ export function AdminStoriesAndPhotosPanel({
     }
   }
 
+  async function toggleStoryPublish(story: SuccessStoryRow) {
+    if (shouldUseLocalMode()) {
+      updateLocalDb((db) => ({
+        ...db,
+        success_stories: db.success_stories.map((s) =>
+          s.id === story.id ? { ...s, is_published: !s.is_published } : s,
+        ),
+      }));
+      onStatus("Success story visibility updated.");
+    } else {
+      const { error } = await supabase
+        .from("success_stories")
+        .update({ is_published: !story.is_published })
+        .eq("id", story.id);
+      onStatus(error ? error.message : "Success story visibility updated.", Boolean(error));
+    }
+    qc.invalidateQueries({ queryKey: ["admin-dashboard"] });
+    qc.invalidateQueries({ queryKey: ["success-stories"] });
+    qc.invalidateQueries({ queryKey: ["home-success-stories"] });
+  }
+
+  async function togglePhotoPublish(photo: ActivityPhotoRow) {
+    if (shouldUseLocalMode()) {
+      updateLocalDb((db) => ({
+        ...db,
+        activity_photos: db.activity_photos.map((p) =>
+          p.id === photo.id ? { ...p, is_published: !p.is_published } : p,
+        ),
+      }));
+      onStatus("Photo visibility updated.");
+    } else {
+      const { error } = await supabase
+        .from("activity_photos")
+        .update({ is_published: !photo.is_published })
+        .eq("id", photo.id);
+      onStatus(error ? error.message : "Photo visibility updated.", Boolean(error));
+    }
+    qc.invalidateQueries({ queryKey: ["admin-dashboard"] });
+    qc.invalidateQueries({ queryKey: ["home-activity-photos"] });
+  }
+
+  async function restoreDefaultPhotos() {
+    if (shouldUseLocalMode()) {
+      updateLocalDb((db) => {
+        const existingIds = new Set(db.activity_photos.map((p) => p.id));
+        const missing = DEFAULT_ACTIVITY_PHOTOS.filter((d) => !existingIds.has(d.id));
+        return {
+          ...db,
+          activity_photos: [...db.activity_photos, ...missing],
+        };
+      });
+      onStatus("Default homepage gallery photos restored.");
+      qc.invalidateQueries({ queryKey: ["admin-dashboard"] });
+      qc.invalidateQueries({ queryKey: ["home-activity-photos"] });
+      return;
+    }
+    onStatus("Use Upload Gallery Photo to add photos to your live database.");
+  }
+
   async function deleteStory(id: string) {
     if (shouldUseLocalMode()) {
       updateLocalDb((db) => ({
@@ -1273,13 +1334,14 @@ export function AdminStoriesAndPhotosPanel({
                 <th>Learner</th>
                 <th>Focus Area</th>
                 <th>Privacy Mode</th>
+                <th>Status</th>
                 <th style={{ textAlign: "right" }}>Action</th>
               </tr>
             </thead>
             <tbody>
               {stories.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="text-center text-muted-foreground py-8">
+                  <td colSpan={6} className="text-center text-muted-foreground py-8">
                     No custom success stories added yet.
                   </td>
                 </tr>
@@ -1298,8 +1360,20 @@ export function AdminStoriesAndPhotosPanel({
                         {s.is_anonymous ? "Anonymous" : "Consent Verified"}
                       </span>
                     </td>
+                    <td className="whitespace-nowrap">
+                      <span className={`pill-badge ${s.is_published ? "pill-green" : ""}`}>
+                        {s.is_published ? "Published" : "Hidden"}
+                      </span>
+                    </td>
                     <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                       <div className="admin-actions">
+                        <button
+                          type="button"
+                          className="admin-action-btn admin-action-btn-secondary"
+                          onClick={() => toggleStoryPublish(s)}
+                        >
+                          {s.is_published ? "Hide" : "Publish"}
+                        </button>
                         <button
                           type="button"
                           className="admin-action-btn admin-action-btn-icon admin-action-btn-danger"
@@ -1327,14 +1401,26 @@ export function AdminStoriesAndPhotosPanel({
                 <th>Title</th>
                 <th>Category</th>
                 <th>Caption</th>
+                <th>Status</th>
                 <th style={{ textAlign: "right" }}>Action</th>
               </tr>
             </thead>
             <tbody>
               {photos.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="text-center text-muted-foreground py-8">
-                    No extra gallery photos uploaded yet.
+                  <td colSpan={6} className="text-center text-muted-foreground py-8">
+                    <div className="flex flex-col items-center gap-3">
+                      <span>No homepage gallery photos yet.</span>
+                      {shouldUseLocalMode() && (
+                        <button
+                          type="button"
+                          className="admin-action-btn admin-action-btn-secondary"
+                          onClick={() => void restoreDefaultPhotos()}
+                        >
+                          <RotateCcw size={13} /> Restore Default Photos
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (
@@ -1354,8 +1440,20 @@ export function AdminStoriesAndPhotosPanel({
                       <span className="pill-badge">{p.category}</span>
                     </td>
                     <td className="text-xs text-muted-foreground">{p.caption}</td>
+                    <td className="whitespace-nowrap">
+                      <span className={`pill-badge ${p.is_published ? "pill-green" : ""}`}>
+                        {p.is_published ? "Published" : "Hidden"}
+                      </span>
+                    </td>
                     <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                       <div className="admin-actions">
+                        <button
+                          type="button"
+                          className="admin-action-btn admin-action-btn-secondary"
+                          onClick={() => togglePhotoPublish(p)}
+                        >
+                          {p.is_published ? "Hide" : "Publish"}
+                        </button>
                         <button
                           type="button"
                           className="admin-action-btn admin-action-btn-icon admin-action-btn-danger"

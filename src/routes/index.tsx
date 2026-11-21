@@ -15,11 +15,9 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import classroom from "@/assets/rabata-classroom.jpeg.asset.json";
-import education from "@/assets/education.jpeg.asset.json";
-import food from "@/assets/food-drive.jpeg.asset.json";
-import space from "@/assets/space.jpeg.asset.json";
 import { pageHead, site } from "@/lib/site";
 import {
+  DEFAULT_ACTIVITY_PHOTOS,
   fetchPublishedActivityPhotos,
   fetchPublishedStories,
   fetchPublicFundData,
@@ -39,6 +37,7 @@ function Index() {
   const photosQuery = useQuery({
     queryKey: ["home-activity-photos"],
     queryFn: fetchPublishedActivityPhotos,
+    placeholderData: DEFAULT_ACTIVITY_PHOTOS,
   });
   const storiesQuery = useQuery({
     queryKey: ["home-success-stories"],
@@ -49,7 +48,7 @@ function Index() {
     queryFn: fetchPublicFundData,
   });
 
-  const uploadedPhotos = photosQuery.data ?? [];
+  const galleryPhotos = photosQuery.data ?? DEFAULT_ACTIVITY_PHOTOS;
   const topStory = storiesQuery.data?.[0];
   const fundSummary = fundsQuery.data?.summary;
 
@@ -236,90 +235,35 @@ function Index() {
             </Link>
           </div>
 
-          <div className="gallery-grid">
-            <article className="gallery-card">
-              <img
-                src={classroom.url}
-                alt="Founder Tammana Rathore teaching Rabata students around a study table"
-                loading="lazy"
-                width={1448}
-                height={1086}
-              />
-              <div className="gallery-card-body">
-                <span className="pill-badge pill-green">Founder Teaching</span>
-                <h3>Personal teaching with Tammana</h3>
-                <p>
-                  Direct, individual attention in foundational subjects, reading and confidence
-                  building from the founder’s learning space.
-                </p>
-              </div>
-            </article>
-
-            <article className="gallery-card">
-              <img
-                src={education.url}
-                alt="Rabata free English classes and mentorship poster"
-                loading="lazy"
-                width={904}
-                height={1280}
-              />
-              <div className="gallery-card-body">
-                <span className="pill-badge">Mentor Sessions</span>
-                <h3>Spoken English &amp; academic support</h3>
-                <p>
-                  Reading, grammar, vocabulary and everyday communication practice led with patience
-                  and dignity.
-                </p>
-              </div>
-            </article>
-
-            <article className="gallery-card">
-              <img
-                src={food.url}
-                alt="Rabata food donation drive poster"
-                loading="lazy"
-                width={1024}
-                height={1536}
-              />
-              <div className="gallery-card-body">
-                <span className="pill-badge pill-gold">Community Activity</span>
-                <h3>Fresh meals &amp; community care</h3>
-                <p>
-                  Freshly prepared home-cooked meals shared with children because nourishment and
-                  learning belong together.
-                </p>
-              </div>
-            </article>
-
-            <article className="gallery-card">
-              <img
-                src={space.url}
-                alt="Concept layout of Rabata community study space"
-                loading="lazy"
-                width={1312}
-                height={1199}
-              />
-              <div className="gallery-card-body">
-                <span className="pill-badge">Vision &amp; Study Space</span>
-                <h3>A welcoming space to belong</h3>
-                <p>
-                  Our supplied vision for dedicated study corners, digital access and small-group
-                  mentorship sessions.
-                </p>
-              </div>
-            </article>
-
-            {uploadedPhotos.map((photo) => (
-              <article key={photo.id} className="gallery-card">
-                <img src={photo.image_url} alt={photo.title} loading="lazy" />
-                <div className="gallery-card-body">
-                  <span className="pill-badge pill-green">{photo.category}</span>
-                  <h3>{photo.title}</h3>
-                  <p>{photo.caption}</p>
-                </div>
-              </article>
-            ))}
-          </div>
+          {galleryPhotos.length === 0 ? (
+            <div className="empty-state">
+              <p>No homepage gallery photos are currently published.</p>
+              <Link to="/admin" className="text-link mt-3 inline-flex">
+                Manage homepage gallery in Admin <ArrowRight size={14} />
+              </Link>
+            </div>
+          ) : (
+            <div className="gallery-grid">
+              {galleryPhotos.map((photo) => {
+                const badgeClass =
+                  photo.category === "Founder Teaching"
+                    ? "pill-badge pill-green"
+                    : photo.category === "Community Activity"
+                      ? "pill-badge pill-gold"
+                      : "pill-badge";
+                return (
+                  <article key={photo.id} className="gallery-card">
+                    <img src={photo.image_url} alt={photo.title} loading="lazy" />
+                    <div className="gallery-card-body">
+                      <span className={badgeClass}>{photo.category}</span>
+                      <h3>{photo.title}</h3>
+                      <p>{photo.caption}</p>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
         </div>
       </section>
 

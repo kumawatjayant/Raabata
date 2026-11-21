@@ -1,3 +1,7 @@
+import classroom from "@/assets/rabata-classroom.jpeg.asset.json";
+import education from "@/assets/education.jpeg.asset.json";
+import food from "@/assets/food-drive.jpeg.asset.json";
+import space from "@/assets/space.jpeg.asset.json";
 import type { RoleRow } from "./access";
 import type {
   ActivityPhotoRow,
@@ -56,6 +60,80 @@ export const LOCAL_DEV_ACCOUNTS: Record<LocalDevRoleKey, LocalDevSession> = {
 const SESSION_KEY = "rabata_local_dev_session_v1";
 const DB_KEY = "rabata_local_db_v3";
 const ENQUIRIES_KEY = "rabata_local_enquiries_v1";
+const CONTENT_SYNC_KEY = "rabata_default_content_synced_v1";
+
+export const DEFAULT_BASELINE_STORY: SuccessStoryRow = {
+  id: "baseline-starbucks-interview",
+  learner_display_name: "Anonymous Learner",
+  class_or_age: "Young Adult Learner",
+  focus_area: "Career & Interview Readiness",
+  title: "Preparing for a first formal interview with confidence",
+  story_summary:
+    "Documented in Rabata’s organization profile: a young learner in Derabassi received individualized mentorship to prepare for an interview opportunity at Starbucks.",
+  support_given:
+    "One-on-one spoken English practice, mock interview coaching, workplace etiquette, and personal encouragement from Tammana Rathore.",
+  achievement_or_progress:
+    "Developed the communication clarity and confidence needed to step into a formal corporate interview process for the first time. (Reported as interview preparation; no unverified placement claim is published.)",
+  quote:
+    "Education at Rabata goes beyond textbooks — it helps young learners believe they belong in rooms they once thought were closed to them.",
+  image_url: null,
+  is_anonymous: true,
+  guardian_consent_verified: false,
+  is_published: true,
+  created_by: null,
+  created_at: "2026-11-15T00:00:00Z",
+};
+
+export const DEFAULT_ACTIVITY_PHOTOS: ActivityPhotoRow[] = [
+  {
+    id: "photo-default-1",
+    title: "Personal teaching with Tammana",
+    category: "Founder Teaching",
+    caption:
+      "Direct, individual attention in foundational subjects, reading and confidence building from the founder’s learning space.",
+    image_url: classroom.url,
+    consent_verified: true,
+    is_published: true,
+    created_by: null,
+    created_at: "2026-11-15T00:00:00Z",
+  },
+  {
+    id: "photo-default-2",
+    title: "Spoken English & academic support",
+    category: "Mentor Session",
+    caption:
+      "Reading, grammar, vocabulary and everyday communication practice led with patience and dignity.",
+    image_url: education.url,
+    consent_verified: true,
+    is_published: true,
+    created_by: null,
+    created_at: "2026-11-15T00:00:00Z",
+  },
+  {
+    id: "photo-default-3",
+    title: "Fresh meals & community care",
+    category: "Community Activity",
+    caption:
+      "Freshly prepared home-cooked meals shared with children because nourishment and learning belong together.",
+    image_url: food.url,
+    consent_verified: true,
+    is_published: true,
+    created_by: null,
+    created_at: "2026-11-15T00:00:00Z",
+  },
+  {
+    id: "photo-default-4",
+    title: "A welcoming space to belong",
+    category: "Classroom Learning",
+    caption:
+      "Our supplied vision for dedicated study corners, digital access and small-group mentorship sessions.",
+    image_url: space.url,
+    consent_verified: true,
+    is_published: true,
+    created_by: null,
+    created_at: "2026-11-15T00:00:00Z",
+  },
+];
 
 export interface LocalEnquiryItem {
   id: string;
@@ -473,6 +551,7 @@ function defaultDatabaseState(): LocalDatabaseState {
       },
     ],
     success_stories: [
+      DEFAULT_BASELINE_STORY,
       {
         id: "sty-2",
         learner_display_name: "Anonymous Learner",
@@ -494,7 +573,7 @@ function defaultDatabaseState(): LocalDatabaseState {
         created_at: now,
       },
     ],
-    activity_photos: [],
+    activity_photos: [...DEFAULT_ACTIVITY_PHOTOS],
   };
 }
 
@@ -546,9 +625,12 @@ export function readLocalDb(): LocalDatabaseState {
   if (typeof window === "undefined") return base;
   try {
     const raw = window.localStorage.getItem(DB_KEY);
-    if (!raw) return base;
+    if (!raw) {
+      window.localStorage.setItem(CONTENT_SYNC_KEY, "1");
+      return base;
+    }
     const parsed = JSON.parse(raw) as Partial<LocalDatabaseState>;
-    return {
+    const merged: LocalDatabaseState = {
       app_profiles: parsed.app_profiles ?? base.app_profiles,
       user_roles: parsed.user_roles ?? base.user_roles,
       mentor_profiles: parsed.mentor_profiles ?? base.mentor_profiles,
@@ -563,6 +645,20 @@ export function readLocalDb(): LocalDatabaseState {
       success_stories: parsed.success_stories ?? base.success_stories,
       activity_photos: parsed.activity_photos ?? base.activity_photos,
     };
+    if (!window.localStorage.getItem(CONTENT_SYNC_KEY)) {
+      const existingPhotoIds = new Set(merged.activity_photos.map((p) => p.id));
+      const missingPhotos = DEFAULT_ACTIVITY_PHOTOS.filter((d) => !existingPhotoIds.has(d.id));
+      if (missingPhotos.length > 0) {
+        merged.activity_photos = [...merged.activity_photos, ...missingPhotos];
+      }
+      const existingStoryIds = new Set(merged.success_stories.map((s) => s.id));
+      if (!existingStoryIds.has(DEFAULT_BASELINE_STORY.id)) {
+        merged.success_stories = [DEFAULT_BASELINE_STORY, ...merged.success_stories];
+      }
+      window.localStorage.setItem(DB_KEY, JSON.stringify(merged));
+      window.localStorage.setItem(CONTENT_SYNC_KEY, "1");
+    }
+    return merged;
   } catch {
     return base;
   }

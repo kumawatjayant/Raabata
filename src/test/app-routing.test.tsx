@@ -16,6 +16,7 @@ import { site } from "@/lib/site";
 import { resources } from "@/lib/resources";
 import {
   calculateFundSummary,
+  DEFAULT_ACTIVITY_PHOTOS,
   extractYouTubeId,
   formatClassLabel,
   getQuizForLecture,
@@ -418,5 +419,19 @@ describe("Platform helpers", () => {
     expect(next1).toBe(`RBT-${year}-004`);
     expect(next2).toBe(`RBT-${year}-005`);
     expect(next1).not.toBe(next2);
+  });
+
+  it("includes all 4 default homepage gallery photos in the admin-managed seed dataset", () => {
+    expect(DEFAULT_ACTIVITY_PHOTOS).toHaveLength(4);
+    expect(DEFAULT_ACTIVITY_PHOTOS.map((p) => p.title)).toEqual([
+      "Personal teaching with Tammana",
+      "Spoken English & academic support",
+      "Fresh meals & community care",
+      "A welcoming space to belong",
+    ]);
+    for (const photo of DEFAULT_ACTIVITY_PHOTOS) {
+      expect(photo.is_published).toBe(true);
+      expect(photo.image_url.length).toBeGreaterThan(0);
+    }
   });
 });

@@ -1,6 +1,14 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
-import { isLocalDevHost, readLocalDb, shouldUseLocalMode } from "./local-store";
+import {
+  DEFAULT_ACTIVITY_PHOTOS,
+  DEFAULT_BASELINE_STORY,
+  isLocalDevHost,
+  readLocalDb,
+  shouldUseLocalMode,
+} from "./local-store";
+
+export { DEFAULT_ACTIVITY_PHOTOS };
 
 export const FUND_CATEGORIES = [
   "Learning Materials & Books",
@@ -273,31 +281,11 @@ export async function fetchPublishedLectures(): Promise<RecordedLectureRow[]> {
   return data;
 }
 
-export const BASELINE_SUCCESS_STORY: SuccessStoryRow = {
-  id: "baseline-starbucks-interview",
-  learner_display_name: "Anonymous Learner",
-  class_or_age: "Young Adult Learner",
-  focus_area: "Career & Interview Readiness",
-  title: "Preparing for a first formal interview with confidence",
-  story_summary:
-    "Documented in Rabata’s organization profile: a young learner in Derabassi received individualized mentorship to prepare for an interview opportunity at Starbucks.",
-  support_given:
-    "One-on-one spoken English practice, mock interview coaching, workplace etiquette, and personal encouragement from Tammana Rathore.",
-  achievement_or_progress:
-    "Developed the communication clarity and confidence needed to step into a formal corporate interview process for the first time. (Reported as interview preparation; no unverified placement claim is published.)",
-  quote:
-    "Education at Rabata goes beyond textbooks — it helps young learners believe they belong in rooms they once thought were closed to them.",
-  image_url: null,
-  is_anonymous: true,
-  guardian_consent_verified: false,
-  is_published: true,
-  created_by: null,
-  created_at: "2026-11-15T00:00:00Z",
-};
+export const BASELINE_SUCCESS_STORY: SuccessStoryRow = DEFAULT_BASELINE_STORY;
 
 export async function fetchPublishedStories(): Promise<SuccessStoryRow[]> {
   if (shouldUseLocalMode()) {
-    return [BASELINE_SUCCESS_STORY, ...readLocalDb().success_stories.filter((s) => s.is_published)];
+    return readLocalDb().success_stories.filter((s) => s.is_published);
   }
   const { data, error } = await supabase
     .from("success_stories")
@@ -305,10 +293,10 @@ export async function fetchPublishedStories(): Promise<SuccessStoryRow[]> {
     .eq("is_published", true)
     .order("created_at", { ascending: false });
   if (shouldUseLocalMode(error)) {
-    return [BASELINE_SUCCESS_STORY, ...readLocalDb().success_stories.filter((s) => s.is_published)];
+    return readLocalDb().success_stories.filter((s) => s.is_published);
   }
   const dbStories = !error && data ? data : [];
-  return [BASELINE_SUCCESS_STORY, ...dbStories];
+  return dbStories.length > 0 ? dbStories : [BASELINE_SUCCESS_STORY];
 }
 
 export async function fetchPublishedActivityPhotos(): Promise<ActivityPhotoRow[]> {
@@ -323,7 +311,7 @@ export async function fetchPublishedActivityPhotos(): Promise<ActivityPhotoRow[]
   if (shouldUseLocalMode(error)) {
     return readLocalDb().activity_photos.filter((p) => p.is_published);
   }
-  if (error || !data) return [];
+  if (error || !data || data.length === 0) return DEFAULT_ACTIVITY_PHOTOS;
   return data;
 }
 
