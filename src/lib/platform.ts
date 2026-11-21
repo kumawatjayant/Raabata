@@ -185,6 +185,15 @@ export async function fetchPublicFundData(): Promise<{
   summary: FundSummary;
   allocations: FundAllocationRow[];
 }> {
+  if (shouldUseLocalMode()) {
+    const db = readLocalDb();
+    const localAllocations = db.fund_allocations.filter((a) => a.is_published);
+    return {
+      summary: calculateFundSummary(db.fund_donations, localAllocations),
+      allocations: localAllocations,
+    };
+  }
+
   const [summaryRes, allocationsRes] = await Promise.all([
     supabase.rpc("get_public_fund_summary"),
     supabase
@@ -240,6 +249,9 @@ export async function fetchPublicFundData(): Promise<{
 }
 
 export async function fetchPublishedLectures(): Promise<RecordedLectureRow[]> {
+  if (shouldUseLocalMode()) {
+    return readLocalDb().recorded_lectures.filter((l) => l.is_published);
+  }
   const { data, error } = await supabase
     .from("recorded_lectures")
     .select("*")
@@ -275,6 +287,9 @@ export const BASELINE_SUCCESS_STORY: SuccessStoryRow = {
 };
 
 export async function fetchPublishedStories(): Promise<SuccessStoryRow[]> {
+  if (shouldUseLocalMode()) {
+    return [BASELINE_SUCCESS_STORY, ...readLocalDb().success_stories.filter((s) => s.is_published)];
+  }
   const { data, error } = await supabase
     .from("success_stories")
     .select("*")
@@ -288,6 +303,9 @@ export async function fetchPublishedStories(): Promise<SuccessStoryRow[]> {
 }
 
 export async function fetchPublishedActivityPhotos(): Promise<ActivityPhotoRow[]> {
+  if (shouldUseLocalMode()) {
+    return readLocalDb().activity_photos.filter((p) => p.is_published);
+  }
   const { data, error } = await supabase
     .from("activity_photos")
     .select("*")

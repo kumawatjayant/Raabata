@@ -14,7 +14,56 @@ type ServerEntry = {
 
 let serverEntryPromise: Promise<ServerEntry> | undefined;
 let cachedAppId: string | undefined;
+let localEnvCache: Record<string, string> | undefined;
 const recentServerCalls: SarvamCallRecord[] = [];
+
+async function loadLocalEnvFile(): Promise<Record<string, string>> {
+  if (localEnvCache) return localEnvCache;
+  const parsed: Record<string, string> = {};
+  if (typeof process === "undefined" || Boolean(process.env["VERCEL"]) || !process.versions?.node) {
+    localEnvCache = parsed;
+    return parsed;
+  }
+  try {
+    const [{ readFile }, { resolve }] = await Promise.all([
+      import("node:fs/promises"),
+      import("node:path"),
+    ]);
+    for (const filename of [".env", ".env.local"]) {
+      try {
+        const content = await readFile(resolve(process.cwd(), filename), "utf8");
+        for (const rawLine of content.split(/\r?\n/)) {
+          const line = rawLine.trim();
+          if (!line || line.startsWith("#")) continue;
+          const eqIdx = line.indexOf("=");
+          if (eqIdx <= 0) continue;
+          const key = line.slice(0, eqIdx).trim();
+          let val = line.slice(eqIdx + 1).trim();
+          if (
+            (val.startsWith('"') && val.endsWith('"')) ||
+            (val.startsWith("'") && val.endsWith("'"))
+          ) {
+            val = val.slice(1, -1);
+          }
+          parsed[key] = val;
+        }
+      } catch {
+        // file may not exist
+      }
+    }
+  } catch (err) {
+    console.warn("[server env]", err);
+  }
+  localEnvCache = parsed;
+  return parsed;
+}
+
+async function getServerEnv(name: string): Promise<string> {
+  const fromProcess = typeof process !== "undefined" ? process.env[name]?.trim() : undefined;
+  if (fromProcess) return fromProcess;
+  const localMap = await loadLocalEnvFile();
+  return (localMap[name] ?? "").trim();
+}
 
 async function getServerEntry(): Promise<ServerEntry> {
   if (!serverEntryPromise) {
@@ -37,7 +86,7 @@ async function resolveSamvaadAppId(
   orgId: string,
   workspaceId: string,
 ): Promise<string | null> {
-  const configured = process.env["SARVAM_APP_ID"]?.trim();
+  const configured = await getServerEnv("SARVAM_APP_ID");
   if (configured) return configured;
   if (cachedAppId) return cachedAppId;
 
@@ -67,13 +116,10 @@ async function fetchLiveSarvamInteractions(): Promise<{
   liveConnected: boolean;
   calls: SarvamCallRecord[];
 }> {
-  const apiKey = (
-    process.env["SARVAM_SAMVAAD_API_KEY"] ||
-    process.env["SARVAM_API_KEY"] ||
-    ""
-  ).trim();
-  const orgId = (process.env["SARVAM_ORG_ID"] || "").trim();
-  const workspaceId = (process.env["SARVAM_WORKSPACE_ID"] || "").trim();
+  const apiKey =
+    (await getServerEnv("SARVAM_SAMVAAD_API_KEY")) || (await getServerEnv("SARVAM_API_KEY"));
+  const orgId = await getServerEnv("SARVAM_ORG_ID");
+  const workspaceId = await getServerEnv("SARVAM_WORKSPACE_ID");
 
   if (!apiKey || !orgId || !workspaceId) {
     return { liveConnected: false, calls: [] };
@@ -152,7 +198,7 @@ async function handleApiRoute(request: Request): Promise<Response | null> {
 
   if (path === "/api/sarvam-webhook" && request.method === "POST") {
     const rawBody = await request.text();
-    const secret = process.env["SARVAM_WEBHOOK_SECRET"];
+    const secret = await getServerEnv("SARVAM_WEBHOOK_SECRET");
     if (secret) {
       const sig = request.headers.get("Sarvam-Signature") ?? "";
       const ts = request.headers.get("Sarvam-Timestamp") ?? "";
@@ -174,7 +220,9 @@ async function handleApiRoute(request: Request): Promise<Response | null> {
     if (recentServerCalls.length > 100) recentServerCalls.length = 100;
 
     let persistedToSupabase = false;
-    if (process.env["SUPABASE_URL"] && process.env["SUPABASE_SERVICE_ROLE_KEY"]) {
+    const supabaseUrl = await getServerEnv("SUPABASE_URL");
+    const serviceRoleKey = await getServerEnv("SUPABASE_SERVICE_ROLE_KEY");
+    if (supabaseUrl && serviceRoleKey) {
       try {
         const { supabaseAdmin } = await import("./integrations/supabase/client.server");
         const vars = record.output_agent_variables;
@@ -229,11 +277,8 @@ async function handleApiRoute(request: Request): Promise<Response | null> {
   }
 
   if (path === "/api/sarvam-chat" && request.method === "POST") {
-    const rawKey = (
-      process.env["SARVAM_CHAT_API_KEY"] ||
-      process.env["SARVAM_API_KEY"] ||
-      ""
-    ).trim();
+    const rawKey =
+      (await getServerEnv("SARVAM_CHAT_API_KEY")) || (await getServerEnv("SARVAM_API_KEY"));
     if (!rawKey || rawKey.startsWith("sk_sam")) {
       return jsonResponse({ ok: false, mode: "local_fallback" }, 200);
     }
@@ -245,6 +290,7 @@ async function handleApiRoute(request: Request): Promise<Response | null> {
         { role: "system", content: RABATA_SARVAM_SYSTEM_PROMPT },
         ...(body.messages ?? []).slice(-10),
       ];
+      const chatModel = (await getServerEnv("SARVAM_CHAT_MODEL")) || "sarvam-105b";
       const res = await fetch("https://api.sarvam.ai/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -252,7 +298,7 @@ async function handleApiRoute(request: Request): Promise<Response | null> {
           "api-subscription-key": rawKey,
         },
         body: JSON.stringify({
-          model: process.env["SARVAM_CHAT_MODEL"] || "sarvam-105b",
+          model: chatModel,
           messages: chatMessages,
           temperature: 0.4,
           max_tokens: 350,
