@@ -124,7 +124,7 @@ export function RabataChatWidget() {
         email: vars.email,
         consent: true,
         details: {
-          channel: "Web AI Chatbot (Sarvam Prompt)",
+          channel: "Website Chat",
           interaction_id: record.interaction_id,
           classLevel: vars.classLevel ?? "",
           subjects: vars.subjects ?? "",
@@ -134,7 +134,7 @@ export function RabataChatWidget() {
         },
       });
     }
-    setSavedNotice("Enquiry & full transcript saved for Tammana's review.");
+    setSavedNotice("Enquiry saved for Tammana's review.");
   }
 
   async function sendUserText(raw: string) {
@@ -197,15 +197,15 @@ export function RabataChatWidget() {
   return (
     <>
       {open && (
-        <aside className="chat-panel" aria-label="Rabata AI Assistant">
+        <aside className="chat-panel" aria-label="Rabata Help Desk Chat">
           <div className="chat-head">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <Bot size={16} style={{ color: "var(--gold)" }} />
-                <strong className="text-sm">Rabata AI Assistant</strong>
+                <strong className="text-sm">Rabata Help Desk</strong>
               </div>
               <div className="text-[10.5px] opacity-80 truncate">
-                24×7 AI Helpline{" "}
+                Need help? Call{" "}
                 <a href={`tel:${site.phone}`} className="underline">
                   {site.phoneDisplay}
                 </a>
@@ -223,7 +223,7 @@ export function RabataChatWidget() {
               <button
                 type="button"
                 className="lang-btn"
-                aria-label="Close AI chatbot"
+                aria-label="Close chat"
                 onClick={() => setOpen(false)}
               >
                 <X size={15} />
@@ -313,22 +313,18 @@ export function RabataChatWidget() {
       )}
 
       <div className="chat-fab-wrap">
-        <a
-          href={`tel:${site.phone}`}
-          className="chat-call-pill"
-          title="Call Sarvam AI Multilingual Helpline"
-        >
+        <a href={`tel:${site.phone}`} className="chat-call-pill" title="Call Rabata Helpline">
           <Phone size={13} /> {site.phoneDisplay}
         </a>
         <button
           type="button"
           className="chat-fab"
           aria-expanded={open}
-          aria-label="Open Rabata AI Chatbot"
+          aria-label="Chat with Rabata"
           onClick={() => setOpen((o) => !o)}
         >
           {open ? <X size={18} /> : <MessageCircle size={18} />}
-          <span>{open ? "Close AI Chat" : "Rabata AI Chat"}</span>
+          <span>{open ? "Close Chat" : "Chat with Rabata"}</span>
         </button>
       </div>
     </>

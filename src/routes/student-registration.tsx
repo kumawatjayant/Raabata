@@ -33,9 +33,9 @@ function Students() {
             <div className="contact-detail">
               <Phone size={18} />
               <div>
-                <small>Prefer calling by phone? (Hindi · Punjabi · English)</small>
+                <small>Prefer to register by phone? (Hindi · Punjabi · English)</small>
                 <a href={`tel:${site.phone}`} className="font-semibold text-foreground">
-                  Call Rabata Helpline: {site.phoneDisplay}
+                  Call Rabata: {site.phoneDisplay}
                 </a>
               </div>
             </div>

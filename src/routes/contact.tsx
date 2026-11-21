@@ -36,11 +36,14 @@ function Contact() {
             <div className="contact-detail">
               <Phone size={19} />
               <div>
-                <small>24×7 Multilingual AI Voice Helpline (Sarvam AI)</small>
+                <small>Call Rabata Helpline</small>
                 <a href={`tel:${site.phone}`} className="font-semibold text-foreground">
                   {site.phoneDisplay}
                 </a>
-                <p>Call anytime in Hindi, Punjabi, or English to register or enquire.</p>
+                <p>
+                  Call us in Hindi, Punjabi, or English for classes, student registration, or
+                  volunteering.
+                </p>
               </div>
             </div>
             <div className="contact-detail">

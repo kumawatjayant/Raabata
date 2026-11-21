@@ -565,10 +565,10 @@ export function createInitialChatSession(lang: AppLanguage): ChatSessionState {
 
 export function getWelcomeMessageForLanguage(lang: AppLanguage): string {
   if (lang === "hi") {
-    return `नमस्ते! राबता AI सहायक में आपका स्वागत है। आप हमारी निःशुल्क कक्षाओं, विषयों, रिकॉर्डेड लेक्चर या फंड पारदर्शिता के बारे में कोई भी प्रश्न पूछ सकते हैं — या छात्र पंजीकरण व स्वयंसेवा शुरू कर सकते हैं। (हेल्पलाइन: ${site.phoneDisplay})`;
+    return `नमस्ते! राबता सहायता केंद्र में आपका स्वागत है। आप हमारी निःशुल्क कक्षाओं, विषयों, रिकॉर्डेड लेक्चर या फंड पारदर्शिता के बारे में कोई भी प्रश्न पूछ सकते हैं — या छात्र पंजीकरण व स्वयंसेवा शुरू कर सकते हैं। (हेल्पलाइन: ${site.phoneDisplay})`;
   }
   if (lang === "pa") {
-    return `ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ! ਰਾਬਤਾ AI ਸਹਾਇਕ ਵਿੱਚ ਤੁਹਾਡਾ ਸਵਾਗਤ ਹੈ। ਤੁਸੀਂ ਸਾਡੀਆਂ ਮੁਫ਼ਤ ਜਮਾਤਾਂ, ਵਿਸ਼ਿਆਂ ਜਾਂ ਫੰਡ ਪਾਰਦਰਸ਼ਤਾ ਬਾਰੇ ਕੁਝ ਵੀ ਪੁੱਛ ਸਕਦੇ ਹੋ — ਜਾਂ ਵਿਦਿਆਰਥੀ ਰਜਿਸਟ੍ਰੇਸ਼ਨ ਸ਼ੁਰੂ ਕਰ ਸਕਦੇ ਹੋ। (ਹੈਲਪਲਾਈਨ: ${site.phoneDisplay})`;
+    return `ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ! ਰਾਬਤਾ ਸਹਾਇਤਾ ਕੇਂਦਰ ਵਿੱਚ ਤੁਹਾਡਾ ਸਵਾਗਤ ਹੈ। ਤੁਸੀਂ ਸਾਡੀਆਂ ਮੁਫ਼ਤ ਜਮਾਤਾਂ, ਵਿਸ਼ਿਆਂ ਜਾਂ ਫੰਡ ਪਾਰਦਰਸ਼ਤਾ ਬਾਰੇ ਕੁਝ ਵੀ ਪੁੱਛ ਸਕਦੇ ਹੋ — ਜਾਂ ਵਿਦਿਆਰਥੀ ਰਜਿਸਟ੍ਰੇਸ਼ਨ ਸ਼ੁਰੂ ਕਰ ਸਕਦੇ ਹੋ। (ਹੈਲਪਲਾਈਨ: ${site.phoneDisplay})`;
   }
   return RABATA_SARVAM_FIRST_MESSAGE;
 }
@@ -603,7 +603,7 @@ function answerKnowledgeQuestion(lower: string, lang: AppLanguage): string | nul
   ) {
     return localizedReply(
       lang,
-      `Rabata operates in Derabassi, Punjab (founder's residential learning space) as well as Online. For child safety we don't publish a street address publicly; Tammana coordinates schedules & visits personally after enquiry review. Call our AI helpline anytime at ${site.phoneDisplay}.`,
+      `Rabata operates in Derabassi, Punjab (founder's residential learning space) as well as Online. For child safety we don't publish a street address publicly; Tammana coordinates schedules & visits personally after enquiry review. Call our helpline anytime at ${site.phoneDisplay}.`,
       `राबता डेराबस्सी, पंजाब में व्यक्तिगत केंद्र व ऑनलाइन दोनों माध्यमों से पढ़ाता है। बाल सुरक्षा के कारण सटीक घर का पता ऑनलाइन नहीं दिया जाता—पंजीकरण के बाद तमन्ना स्वयं समय तय करती हैं। हेल्पलाइन: ${site.phoneDisplay}`,
       `ਰਾਬਤਾ ਡੇਰਾਬੱਸੀ, ਪੰਜਾਬ ਅਤੇ ਆਨਲਾਈਨ ਦੋਵਾਂ ਤਰੀਕਿਆਂ ਨਾਲ ਪੜ੍ਹਾਉਂਦਾ ਹੈ। ਬਾਲ ਸੁਰੱਖਿਆ ਕਾਰਨ ਰਜਿਸਟ੍ਰੇਸ਼ਨ ਤੋਂ ਬਾਅਦ ਤਮੰਨਾ ਸਮਾਂ ਤੈਅ ਕਰਦੇ ਹਨ। ਹੈਲਪਲਾਈਨ: ${site.phoneDisplay}`,
     );
@@ -653,9 +653,9 @@ function answerKnowledgeQuestion(lower: string, lang: AppLanguage): string | nul
   ) {
     return localizedReply(
       lang,
-      `Call our 24x7 Multilingual Sarvam AI Voice Helpline anytime at ${site.phoneDisplay} (Hindi, Punjabi, English), email ${site.email}, or follow @rabata._.official on Instagram.`,
-      `हमारी 24x7 बहुभाषी Sarvam AI हेल्पलाइन ${site.phoneDisplay} पर कभी भी कॉल करें, या ${site.email} पर ईमेल करें।`,
-      `ਸਾਡੀ 24x7 Sarvam AI ਹੈਲਪਲਾਈਨ ${site.phoneDisplay} ਤੇ ਕਦੇ ਵੀ ਕਾਲ ਕਰੋ, ਜਾਂ ${site.email} ਤੇ ਈਮੇਲ ਕਰੋ।`,
+      `You can call Rabata anytime at ${site.phoneDisplay} (Hindi, Punjabi, or English), email ${site.email}, or follow @rabata._.official on Instagram.`,
+      `आप राबता को ${site.phoneDisplay} पर कभी भी कॉल कर सकते हैं (हिंदी, पंजाबी या अंग्रेज़ी), या ${site.email} पर ईमेल कर सकते हैं।`,
+      `ਤੁਸੀਂ ਰਾਬਤਾ ਨੂੰ ${site.phoneDisplay} ਤੇ ਕਦੇ ਵੀ ਕਾਲ ਕਰ ਸਕਦੇ ਹੋ (ਹਿੰਦੀ, ਪੰਜਾਬੀ ਜਾਂ ਅੰਗਰੇਜ਼ੀ), ਜਾਂ ${site.email} ਤੇ ਈਮੇਲ ਕਰ ਸਕਦੇ ਹੋ।`,
     );
   }
 
@@ -1031,7 +1031,7 @@ export function generateRabataAgentReply(
     return {
       reply: localizedReply(
         lang,
-        `I can answer questions about Rabata's free programs, recorded lectures (/learn), and open fund ledger (/funds) — or help you register a student, volunteer as a mentor, or send a message. Our 24x7 AI Helpline is also reachable at ${site.phoneDisplay}. What would you like to do?`,
+        `I can answer questions about Rabata's free programs, recorded lectures (/learn), and open fund ledger (/funds) — or help you register a student, volunteer as a mentor, or send a message. You can also call us at ${site.phoneDisplay}. What would you like to do?`,
         `मैं राबता की निःशुल्क कक्षाओं, रिकॉर्डेड लेक्चर (/learn) और फंड पारदर्शिता (/funds) से जुड़े सवालों के जवाब दे सकता हूँ — या छात्र पंजीकरण व स्वयंसेवा में मदद कर सकता हूँ। हेल्पलाइन: ${site.phoneDisplay}`,
         `ਮੈਂ ਰਾਬਤਾ ਦੀਆਂ ਮੁਫ਼ਤ ਜਮਾਤਾਂ, ਲੈਕਚਰ (/learn) ਅਤੇ ਫੰਡ ਪਾਰਦਰਸ਼ਤਾ (/funds) ਬਾਰੇ ਸਵਾਲਾਂ ਦੇ ਜਵਾਬ ਦੇ ਸਕਦਾ ਹਾਂ ਜਾਂ ਰਜਿਸਟ੍ਰੇਸ਼ਨ ਵਿੱਚ ਮਦਦ ਕਰ ਸਕਦਾ ਹਾਂ। ਹੈਲਪਲਾਈਨ: ${site.phoneDisplay}`,
       ),

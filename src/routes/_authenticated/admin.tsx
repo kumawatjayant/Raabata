@@ -79,9 +79,9 @@ const SECTION_META: Record<AdminSectionId, { title: string; subtitle: string }> 
     subtitle: "Manage mentor profiles, student assignments, and classroom attendance logs.",
   },
   access: {
-    title: "Calls, Transcripts & Enquiries",
+    title: "Recent Calls & Enquiries",
     subtitle:
-      "Track Sarvam AI voice calls (+91 79654 81661), chatbot transcripts, enquiries, and role approvals.",
+      "Listen & read recent helpline call transcripts (+91 79654 81661), handle website enquiries, and approve accounts.",
   },
   lectures: {
     title: "Recorded Lectures Studio",

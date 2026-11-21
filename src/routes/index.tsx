@@ -96,7 +96,7 @@ function Index() {
             <div className="hero-note">
               <ShieldCheck size={14} /> Free learning · Guardian-safe records · Open fund ledger ·{" "}
               <a href={`tel:${site.phone}`} className="underline">
-                AI Helpline {site.phoneDisplay}
+                Call {site.phoneDisplay}
               </a>
             </div>
           </div>

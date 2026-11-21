@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
-import { Check, Link2, Mail, PhoneCall, Trash2, UserPlus, Webhook, X } from "lucide-react";
+import { Check, Link2, Mail, PhoneCall, Trash2, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AdminSarvamCallTracker } from "@/components/admin-sarvam-tracker";
 import { supabase } from "@/integrations/supabase/client";
@@ -28,7 +28,7 @@ export function AdminAccessAndEnquiriesPanel({
   onStatus: (msg: string, isErr?: boolean) => void;
 }) {
   const qc = useQueryClient();
-  const [subTab, setSubTab] = useState<"calls" | "inbox" | "setup">("calls");
+  const [subTab, setSubTab] = useState<"calls" | "inbox">("calls");
   const [kindFilter, setKindFilter] = useState<"all" | "student" | "volunteer" | "contact">("all");
 
   async function review(id: string, decision: "active" | "rejected") {
@@ -164,7 +164,7 @@ export function AdminAccessAndEnquiriesPanel({
           className="tab-btn"
           onClick={() => setSubTab("calls")}
         >
-          <PhoneCall size={14} /> Calls &amp; Transcripts (+91 79654 81661)
+          <PhoneCall size={14} /> Recent Calls &amp; Transcripts (+91 79654 81661)
         </button>
         <button
           type="button"
@@ -173,35 +173,12 @@ export function AdminAccessAndEnquiriesPanel({
           className="tab-btn"
           onClick={() => setSubTab("inbox")}
         >
-          <Mail size={14} /> Website Enquiries &amp; Role Approvals ({filteredEnquiries.length})
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={subTab === "setup"}
-          className="tab-btn"
-          onClick={() => setSubTab("setup")}
-        >
-          <Webhook size={14} /> Sarvam Webhook, API &amp; Prompt Setup
+          <Mail size={14} /> Website Enquiries &amp; Account Approvals ({filteredEnquiries.length})
         </button>
       </div>
 
       {subTab === "calls" && (
-        <AdminSarvamCallTracker
-          dbEnquiries={enquiries}
-          mode="logs"
-          onEnrollCall={enrollCall}
-          onStatus={onStatus}
-        />
-      )}
-
-      {subTab === "setup" && (
-        <AdminSarvamCallTracker
-          dbEnquiries={enquiries}
-          mode="setup"
-          onEnrollCall={enrollCall}
-          onStatus={onStatus}
-        />
+        <AdminSarvamCallTracker dbEnquiries={enquiries} onEnrollCall={enrollCall} />
       )}
 
       {subTab === "inbox" && (
@@ -255,8 +232,8 @@ export function AdminAccessAndEnquiriesPanel({
                 </div>
                 <h2>Submitted enquiries &amp; registrations ({filteredEnquiries.length})</h2>
                 <p className="section-copy">
-                  Contact, student registration and volunteer applications submitted through forms,
-                  Sarvam AI calls, or the website AI chatbot.
+                  Student registrations, volunteer applications, and contact messages received from
+                  the website and helpline calls.
                 </p>
               </div>
               <select

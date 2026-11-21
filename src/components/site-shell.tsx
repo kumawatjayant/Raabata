@@ -69,7 +69,7 @@ export function Header() {
                 </button>
               ))}
             </div>
-            <a href={`tel:${site.phone}`} title="Sarvam AI 24x7 Multilingual Helpline">
+            <a href={`tel:${site.phone}`} title="Call Rabata Helpline">
               <Phone size={12} /> {site.phoneDisplay}
             </a>
             <a href={site.instagram} target="_blank" rel="noreferrer">
@@ -193,7 +193,7 @@ export function Footer() {
             <h3>Let’s stay connected</h3>
             <a href={`tel:${site.phone}`} className="footer-social">
               <Phone size={14} />
-              {site.phoneDisplay} (AI Voice Helpline)
+              {site.phoneDisplay}
             </a>
             <a href={`mailto:${site.email}`} className="footer-social">
               <Mail size={14} />
