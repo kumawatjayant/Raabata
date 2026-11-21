@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  ChevronDown,
-  ChevronUp,
   Clock,
   MessageCircle,
   MessageSquareText,
@@ -10,6 +8,7 @@ import {
   Search,
   UserPlus,
 } from "lucide-react";
+import { AdminModal } from "@/components/admin-modal";
 import { Button } from "@/components/ui/button";
 import type { AdminEnquiryItem } from "@/lib/enquiries.functions";
 import {
@@ -47,7 +46,7 @@ export function AdminSarvamCallTracker({
     "all" | "sarvam_voice_call" | "rabata_web_chatbot"
   >("all");
   const [search, setSearch] = useState("");
-  const [expandedCallId, setExpandedCallId] = useState<string | null>("srv-call-1");
+  const [activeCall, setActiveCall] = useState<SarvamCallRecord | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   async function refreshFromServer() {
@@ -164,26 +163,61 @@ export function AdminSarvamCallTracker({
         </Button>
       </div>
 
-      {filteredCalls.length === 0 ? (
-        <div className="empty-state">No recent calls match your search.</div>
-      ) : (
-        <div className="grid gap-4">
-          {filteredCalls.map((call) => {
-            const isOpen = expandedCallId === call.id;
-            const vars = call.output_agent_variables;
-            const langName = formatLanguageLabel(call.detected_language, vars.language);
-            const intentLabel =
-              vars.kind === "student"
-                ? "Student Registration"
-                : vars.kind === "volunteer"
-                  ? "Volunteer Application"
-                  : "General Enquiry";
+      <div className="admin-table-wrap">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>Date &amp; Time</th>
+              <th>Caller</th>
+              <th>Phone / Contact</th>
+              <th>Channel</th>
+              <th>Language</th>
+              <th>Request Type</th>
+              <th>Duration</th>
+              <th>Status</th>
+              <th style={{ textAlign: "right" }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredCalls.length === 0 ? (
+              <tr>
+                <td colSpan={9} className="text-center text-muted-foreground py-8">
+                  No recent calls match your search.
+                </td>
+              </tr>
+            ) : (
+              filteredCalls.map((call) => {
+                const vars = call.output_agent_variables;
+                const langName = formatLanguageLabel(call.detected_language, vars.language);
+                const intentLabel =
+                  vars.kind === "student"
+                    ? "Student Registration"
+                    : vars.kind === "volunteer"
+                      ? "Volunteer"
+                      : "Enquiry";
 
-            return (
-              <article key={call.id} className="sarvam-call-card">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="ledger-badges">
+                return (
+                  <tr key={call.id}>
+                    <td className="whitespace-nowrap text-xs text-muted-foreground">
+                      {new Date(call.start_datetime).toLocaleString("en-IN", {
+                        day: "numeric",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </td>
+                    <td>
+                      <strong>{vars.name}</strong>
+                      {(vars.classLevel || vars.subjects) && (
+                        <div className="text-xs text-muted-foreground">
+                          {vars.classLevel ? `Class ${vars.classLevel}` : ""}
+                          {vars.classLevel && vars.subjects ? " · " : ""}
+                          {vars.subjects ?? ""}
+                        </div>
+                      )}
+                    </td>
+                    <td className="text-xs">{call.user_phone_number}</td>
+                    <td>
                       <span
                         className={`pill-badge ${
                           call.channel === "sarvam_voice_call" ? "pill-gold" : "pill-green"
@@ -195,95 +229,124 @@ export function AdminSarvamCallTracker({
                           </>
                         ) : (
                           <>
-                            <MessageCircle size={11} /> Website Chat
+                            <MessageCircle size={11} /> Web Chat
                           </>
                         )}
                       </span>
+                    </td>
+                    <td>{langName}</td>
+                    <td>
                       <span className="pill-badge">{intentLabel}</span>
-                      <span className="pill-badge">{langName}</span>
-                      {call.status === "enrolled" && (
-                        <span className="pill-badge pill-green">Added to Students</span>
-                      )}
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(call.start_datetime).toLocaleString("en-IN", {
-                          day: "numeric",
-                          month: "short",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}{" "}
-                        · {formatDuration(call.duration)}
-                      </span>
-                    </div>
-
-                    <h3 className="mt-2 text-base font-semibold">
-                      {vars.name} ·{" "}
-                      <span className="font-normal text-muted-foreground">
-                        {call.user_phone_number}
-                      </span>
-                    </h3>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {vars.classLevel ? `Class ${vars.classLevel} · ` : ""}
-                      {vars.subjects ? `${vars.subjects} · ` : ""}
-                      {vars.message}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2 shrink-0">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setExpandedCallId(isOpen ? null : call.id)}
-                    >
-                      {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                      {isOpen ? "Hide Transcript" : "Read Transcript"}
-                    </Button>
-                    {vars.kind === "student" && call.status !== "enrolled" && (
-                      <Button
-                        size="sm"
-                        onClick={async () => {
-                          await onEnrollCall(call);
-                          setLocalCalls(updateSarvamCallStatus(call.id, "enrolled"));
-                        }}
+                    </td>
+                    <td className="whitespace-nowrap">{formatDuration(call.duration)}</td>
+                    <td>
+                      <span
+                        className={`pill-badge ${call.status === "enrolled" ? "pill-green" : ""}`}
                       >
-                        <UserPlus size={14} /> Enroll Student
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
-                {isOpen && (
-                  <div className="transcript-box">
-                    <div className="text-[11px] font-semibold text-primary">
-                      Full Call Conversation Transcript ({langName})
-                    </div>
-                    {call.interaction_transcript.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">{vars.message}</p>
-                    ) : (
-                      call.interaction_transcript.map((turn) => (
-                        <div key={`${call.id}-${turn.turn_id}`} className="transcript-turn">
-                          <strong
-                            className={`block mb-1 ${
-                              turn.role === "agent" ? "text-primary" : "text-foreground"
-                            }`}
+                        {call.status === "enrolled" ? "Added to Students" : "Received"}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                      <div className="inline-flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => setActiveCall(call)}>
+                          View Transcript
+                        </Button>
+                        {vars.kind === "student" && call.status !== "enrolled" && (
+                          <Button
+                            size="sm"
+                            onClick={async () => {
+                              await onEnrollCall(call);
+                              setLocalCalls(updateSarvamCallStatus(call.id, "enrolled"));
+                            }}
                           >
-                            {turn.role === "agent" ? "Rabata Helpline" : "Caller"}
-                          </strong>
-                          {turn.indic_text && (
-                            <div className="text-foreground font-medium mb-1">
-                              {turn.indic_text}
-                            </div>
-                          )}
-                          <div className="text-muted-foreground">{turn.en_text}</div>
-                        </div>
-                      ))
+                            <UserPlus size={13} /> Enroll
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <AdminModal
+        open={Boolean(activeCall)}
+        title={
+          activeCall
+            ? `Call Transcript · ${activeCall.output_agent_variables.name}`
+            : "Call Transcript"
+        }
+        subtitle={
+          activeCall
+            ? `${activeCall.user_phone_number} · ${formatLanguageLabel(
+                activeCall.detected_language,
+                activeCall.output_agent_variables.language,
+              )} · ${formatDuration(activeCall.duration)}`
+            : ""
+        }
+        onClose={() => setActiveCall(null)}
+      >
+        {activeCall && (
+          <div className="space-y-4">
+            <div className="border rounded-lg p-3 bg-muted text-xs space-y-1">
+              <div>
+                <strong>Summary:</strong> {activeCall.output_agent_variables.message}
+              </div>
+              {activeCall.output_agent_variables.email && (
+                <div>
+                  <strong>Email:</strong> {activeCall.output_agent_variables.email}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              {activeCall.interaction_transcript.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  {activeCall.output_agent_variables.message}
+                </p>
+              ) : (
+                activeCall.interaction_transcript.map((turn) => (
+                  <div key={`${activeCall.id}-${turn.turn_id}`} className="transcript-turn">
+                    <strong
+                      className={`block mb-1 ${
+                        turn.role === "agent" ? "text-primary" : "text-foreground"
+                      }`}
+                    >
+                      {turn.role === "agent" ? "Rabata Helpline" : "Caller"}
+                    </strong>
+                    {turn.indic_text && (
+                      <div className="text-foreground font-medium mb-1">{turn.indic_text}</div>
                     )}
+                    <div className="text-muted-foreground">{turn.en_text}</div>
                   </div>
+                ))
+              )}
+            </div>
+
+            <div className="pt-2 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setActiveCall(null)}>
+                Close
+              </Button>
+              {activeCall.output_agent_variables.kind === "student" &&
+                activeCall.status !== "enrolled" && (
+                  <Button
+                    onClick={async () => {
+                      const target = activeCall;
+                      await onEnrollCall(target);
+                      setLocalCalls(updateSarvamCallStatus(target.id, "enrolled"));
+                      setActiveCall(null);
+                    }}
+                  >
+                    <UserPlus size={14} /> Enroll as Student
+                  </Button>
                 )}
-              </article>
-            );
-          })}
-        </div>
-      )}
+            </div>
+          </div>
+        )}
+      </AdminModal>
     </div>
   );
 }

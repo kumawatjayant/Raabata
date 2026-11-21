@@ -336,6 +336,22 @@ h2 { font-family:var(--font-display); font-size:35px; font-weight:500; }
 .transcript-box { margin-top:14px; padding:14px; border-radius:10px; background:var(--muted); border:1px solid var(--border); display:grid; gap:10px; }
 .transcript-turn { padding:10px 12px; border-radius:8px; background:var(--background); border:1px solid var(--border); font-size:12.5px; }
 
+/* Enterprise Admin Tables & Pop-up Modals */
+.admin-toolbar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:14px; margin-bottom:18px; }
+.admin-toolbar h2 { font-size:20px; font-weight:600; color:var(--primary); }
+.admin-table-wrap { border:1px solid var(--border); border-radius:14px; background:var(--background); box-shadow:var(--shadow-sm); overflow-x:auto; }
+.admin-table { width:100%; border-collapse:collapse; font-size:13px; text-align:left; }
+.admin-table th { background:var(--muted); color:var(--muted-foreground); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; padding:12px 16px; border-bottom:1px solid var(--border); white-space:nowrap; }
+.admin-table td { padding:13px 16px; border-bottom:1px solid var(--border); vertical-align:middle; }
+.admin-table tbody tr:last-child td { border-bottom:0; }
+.admin-table tbody tr:hover { background:color-mix(in oklch, var(--leaf-soft) 45%, var(--background)); }
+.admin-modal-backdrop { position:fixed; inset:0; z-index:70; background:oklch(.12 .04 252 / .55); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; padding:20px; }
+.admin-modal { width:min(760px, 100%); max-height:calc(100vh - 40px); background:var(--background); border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow-lg); display:flex; flex-direction:column; overflow:hidden; }
+.admin-modal-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding:18px 24px; border-bottom:1px solid var(--border); background:var(--background); }
+.admin-modal-head h2 { font-size:20px; font-weight:600; color:var(--primary); margin:0; }
+.admin-modal-head p { font-size:12.5px; color:var(--muted-foreground); margin-top:2px; }
+.admin-modal-body { padding:24px; overflow-y:auto; }
+
 @media(min-width:1500px) { .hero { min-height:630px; } }
 @media(max-width:1120px) { .desktop-nav { display:none; }.menu-toggle { display:inline-flex; }.mobile-nav { position:absolute; top:112px; left:0; right:0; z-index:40; background:var(--background); border-bottom:1px solid var(--border); padding:20px 24px; display:flex; flex-direction:column; gap:14px; font-size:14px; box-shadow:var(--shadow); }.container { width:calc(100% - 44px); }.hero-grid { grid-template-columns:1fr; } }
 @media(max-width:960px) { .student-dir-grid { grid-template-columns:repeat(2,1fr); }.console-shell { grid-template-columns:1fr; }.console-sidebar { display:none; position:static; height:auto; }.console-sidebar.is-open { display:flex; }.console-mobile-bar { display:flex; }.console-topbar,.console-content { padding-inline:20px; } }

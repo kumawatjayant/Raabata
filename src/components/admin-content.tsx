@@ -1,6 +1,17 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
-import { Award, Camera, ExternalLink, IndianRupee, Receipt, Trash2, Video } from "lucide-react";
+import {
+  Award,
+  Camera,
+  ExternalLink,
+  IndianRupee,
+  Plus,
+  Receipt,
+  Search,
+  Trash2,
+  Video,
+} from "lucide-react";
+import { AdminModal } from "@/components/admin-modal";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { makeLocalId, shouldUseLocalMode, updateLocalDb } from "@/lib/local-store";
@@ -30,7 +41,16 @@ export function AdminLecturesPanel({
   onStatus: (msg: string, isErr?: boolean) => void;
 }) {
   const qc = useQueryClient();
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [search, setSearch] = useState("");
+  const [subjectFilter, setSubjectFilter] = useState("All subjects");
   const [uploading, setUploading] = useState(false);
+
+  const filtered = lectures.filter(
+    (l) =>
+      `${l.title} ${l.topic} ${l.instructor_name}`.toLowerCase().includes(search.toLowerCase()) &&
+      (subjectFilter === "All subjects" || l.subject === subjectFilter),
+  );
 
   async function addLecture(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -96,6 +116,7 @@ export function AdminLecturesPanel({
       }
 
       form.reset();
+      setShowAddModal(false);
       onStatus("Recorded lecture published to Learn with Rabata.");
       qc.invalidateQueries({ queryKey: ["admin-dashboard"] });
       qc.invalidateQueries({ queryKey: ["recorded-lectures"] });
@@ -146,103 +167,171 @@ export function AdminLecturesPanel({
   }
 
   return (
-    <div className="space-y-8">
-      <form className="form-panel" onSubmit={addLecture}>
-        <div className="eyebrow">
-          <Video size={13} /> Recorded lectures
+    <div className="space-y-6">
+      <div className="admin-toolbar">
+        <div>
+          <h2>Recorded Lectures ({filtered.length})</h2>
+          <p className="text-xs text-muted-foreground mt-1">
+            Publish, hide, or manage recorded lessons on Learn with Rabata.
+          </p>
         </div>
-        <h2>Upload or link a recorded lecture</h2>
-        <div className="form-grid">
-          <label className="field wide">
-            Lecture title *
-            <input name="title" required maxLength={200} placeholder="e.g. Spoken English Part 1" />
-          </label>
-          <label className="field">
-            Subject *
-            <select name="subject" defaultValue="English">
-              {LECTURE_SUBJECTS.map((s) => (
-                <option key={s}>{s}</option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            Topic *
-            <input name="topic" required maxLength={120} placeholder="e.g. Daily Conversations" />
-          </label>
-          <label className="field">
-            Class level
-            <select name="class_level" defaultValue="All">
-              {CLASS_LEVELS.map((c) => (
-                <option key={c} value={c}>
-                  {c === "All" ? "All classes" : `Class ${c}`}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            Instructor name
-            <input name="instructor_name" maxLength={120} defaultValue="Tammana Rathore" />
-          </label>
-          <label className="field">
-            Duration (optional)
-            <input name="duration" maxLength={40} placeholder="e.g. 18 mins" />
-          </label>
-          <label className="field">
-            YouTube or direct video URL
-            <input
-              name="video_url"
-              maxLength={1000}
-              placeholder="https://youtube.com/watch?v=..."
-            />
-          </label>
-          <label className="field wide">
-            Or upload recorded video file (MP4/WebM)
-            <input name="video_file" type="file" accept="video/*" />
-          </label>
-          <label className="field wide">
-            Lesson summary
-            <textarea name="description" maxLength={1500} placeholder="What students will learn…" />
-          </label>
-        </div>
-        <Button type="submit" className="mt-5" disabled={uploading}>
-          {uploading ? "Uploading lecture…" : "Publish recorded lecture"}
+        <Button onClick={() => setShowAddModal(true)}>
+          <Plus size={15} /> Add Recorded Lecture
         </Button>
-      </form>
-
-      <div>
-        <h2>All recorded lectures ({lectures.length})</h2>
-        {lectures.length === 0 ? (
-          <div className="empty-state mt-4">No recorded lectures uploaded yet.</div>
-        ) : (
-          <div className="mt-4 grid gap-3">
-            {lectures.map((l) => (
-              <div key={l.id} className="ledger-row">
-                <div className="ledger-main">
-                  <div className="ledger-badges">
-                    <span className="pill-badge pill-green">{l.subject}</span>
-                    <span className="pill-badge">{l.topic}</span>
-                    <span className="pill-badge">{l.is_published ? "Published" : "Hidden"}</span>
-                  </div>
-                  <h3 className="mt-2 text-base font-semibold">{l.title}</h3>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {l.instructor_name} ·{" "}
-                    {l.class_level === "All" ? "All classes" : `Class ${l.class_level}`}
-                    {l.duration ? ` · ${l.duration}` : ""}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => togglePublish(l)}>
-                    {l.is_published ? "Hide" : "Publish"}
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => removeLecture(l.id)}>
-                    <Trash2 size={14} /> Delete
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
+
+      <div className="filters" style={{ gridTemplateColumns: "2fr 1fr" }}>
+        <div className="search-field">
+          <Search size={16} />
+          <input
+            aria-label="Search recorded lectures"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by lecture title, topic, or teacher…"
+          />
+        </div>
+        <select
+          aria-label="Filter by subject"
+          value={subjectFilter}
+          onChange={(e) => setSubjectFilter(e.target.value)}
+        >
+          <option>All subjects</option>
+          {LECTURE_SUBJECTS.map((s) => (
+            <option key={s}>{s}</option>
+          ))}
+        </select>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="empty-state">No recorded lectures match your search.</div>
+      ) : (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Lecture Title</th>
+                <th>Subject</th>
+                <th>Topic</th>
+                <th>Class</th>
+                <th>Instructor</th>
+                <th>Duration</th>
+                <th>Status</th>
+                <th style={{ textAlign: "right" }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((l) => (
+                <tr key={l.id}>
+                  <td>
+                    <strong className="text-foreground">{l.title}</strong>
+                  </td>
+                  <td>
+                    <span className="pill-badge pill-green">{l.subject}</span>
+                  </td>
+                  <td className="text-xs text-muted-foreground">{l.topic}</td>
+                  <td>{l.class_level === "All" ? "All classes" : `Class ${l.class_level}`}</td>
+                  <td>{l.instructor_name}</td>
+                  <td>{l.duration || "—"}</td>
+                  <td>
+                    <span className={`pill-badge ${l.is_published ? "pill-green" : ""}`}>
+                      {l.is_published ? "Published" : "Hidden"}
+                    </span>
+                  </td>
+                  <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                    <div className="inline-flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => togglePublish(l)}>
+                        {l.is_published ? "Hide" : "Publish"}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => removeLecture(l.id)}>
+                        <Trash2 size={14} />
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <AdminModal
+        open={showAddModal}
+        title="Add Recorded Lecture"
+        subtitle="Paste a YouTube video link or upload an MP4/WebM file."
+        onClose={() => setShowAddModal(false)}
+      >
+        <form onSubmit={addLecture}>
+          <div className="form-grid">
+            <label className="field wide">
+              Lecture title *
+              <input
+                name="title"
+                required
+                maxLength={200}
+                placeholder="e.g. Spoken English Part 1"
+              />
+            </label>
+            <label className="field">
+              Subject *
+              <select name="subject" defaultValue="English">
+                {LECTURE_SUBJECTS.map((s) => (
+                  <option key={s}>{s}</option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              Topic *
+              <input name="topic" required maxLength={120} placeholder="e.g. Daily Conversations" />
+            </label>
+            <label className="field">
+              Class level
+              <select name="class_level" defaultValue="All">
+                {CLASS_LEVELS.map((c) => (
+                  <option key={c} value={c}>
+                    {c === "All" ? "All classes" : `Class ${c}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              Instructor name
+              <input name="instructor_name" maxLength={120} defaultValue="Tammana Rathore" />
+            </label>
+            <label className="field">
+              Duration (optional)
+              <input name="duration" maxLength={40} placeholder="e.g. 18 mins" />
+            </label>
+            <label className="field">
+              YouTube or direct video URL
+              <input
+                name="video_url"
+                maxLength={1000}
+                placeholder="https://youtube.com/watch?v=..."
+              />
+            </label>
+            <label className="field wide">
+              Or upload recorded video file (MP4/WebM)
+              <input name="video_file" type="file" accept="video/*" />
+            </label>
+            <label className="field wide">
+              Lesson summary
+              <textarea
+                name="description"
+                maxLength={1500}
+                placeholder="What students will learn…"
+              />
+            </label>
+          </div>
+          <div className="mt-6 flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setShowAddModal(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={uploading}>
+              <Video size={14} /> {uploading ? "Uploading…" : "Publish Lecture"}
+            </Button>
+          </div>
+        </form>
+      </AdminModal>
     </div>
   );
 }
@@ -261,6 +350,8 @@ export function AdminFundsPanel({
   onStatus: (msg: string, isErr?: boolean) => void;
 }) {
   const qc = useQueryClient();
+  const [subTab, setSubTab] = useState<"allocations" | "donations" | "audit">("allocations");
+  const [modalKind, setModalKind] = useState<"donation" | "allocation" | null>(null);
   const [busy, setBusy] = useState(false);
   const summary = calculateFundSummary(donations, allocations);
 
@@ -367,9 +458,8 @@ export function AdminFundsPanel({
     }
 
     form.reset();
-    onStatus(
-      "Contribution recorded securely. Private donor details remain hidden from public pages.",
-    );
+    setModalKind(null);
+    onStatus("Contribution recorded securely.");
     qc.invalidateQueries({ queryKey: ["admin-dashboard"] });
     qc.invalidateQueries({ queryKey: ["public-funds"] });
     qc.invalidateQueries({ queryKey: ["home-funds-summary"] });
@@ -461,7 +551,8 @@ export function AdminFundsPanel({
       }
 
       form.reset();
-      onStatus("Fund allocation/expenditure published with supporting proof.");
+      setModalKind(null);
+      onStatus("Fund allocation / expenditure published.");
       qc.invalidateQueries({ queryKey: ["admin-dashboard"] });
       qc.invalidateQueries({ queryKey: ["public-funds"] });
       qc.invalidateQueries({ queryKey: ["home-funds-summary"] });
@@ -478,22 +569,12 @@ export function AdminFundsPanel({
         ...db,
         fund_allocations: db.fund_allocations.filter((a) => a.id !== item.id),
       }));
-      await logAudit(
-        "DELETE",
-        "fund_allocations",
-        item.id,
-        `Deleted ${item.entry_type}: ${item.title}`,
-      );
+      await logAudit("DELETE", "fund_allocations", item.id, `Deleted: ${item.title}`);
       onStatus("Fund entry deleted.");
     } else {
       const { error } = await supabase.from("fund_allocations").delete().eq("id", item.id);
       if (!error) {
-        await logAudit(
-          "DELETE",
-          "fund_allocations",
-          item.id,
-          `Deleted ${item.entry_type}: ${item.title}`,
-        );
+        await logAudit("DELETE", "fund_allocations", item.id, `Deleted: ${item.title}`);
       }
       onStatus(error ? error.message : "Fund entry deleted.", Boolean(error));
     }
@@ -503,7 +584,7 @@ export function AdminFundsPanel({
   }
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-6">
       <div className="stat-cards">
         <div className="stat-card">
           <div className="stat-label">Received</div>
@@ -514,7 +595,7 @@ export function AdminFundsPanel({
           <div className="stat-value">{formatINR(summary.totalSpentInr)}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">Available</div>
+          <div className="stat-label">Available Balance</div>
           <div className="stat-value">{formatINR(summary.availableBalanceInr)}</div>
         </div>
         <div className="stat-card">
@@ -523,213 +604,377 @@ export function AdminFundsPanel({
         </div>
       </div>
 
-      <form className="form-panel" onSubmit={addDonation}>
-        <div className="eyebrow">
-          <IndianRupee size={13} /> Funds received (Donor details kept private)
+      <div className="admin-toolbar">
+        <div className="admin-tabs" style={{ borderBottom: 0, paddingBottom: 0, marginBottom: 0 }}>
+          <button
+            type="button"
+            aria-selected={subTab === "allocations"}
+            className="tab-btn"
+            onClick={() => setSubTab("allocations")}
+          >
+            Expenses &amp; Allocations ({allocations.length})
+          </button>
+          <button
+            type="button"
+            aria-selected={subTab === "donations"}
+            className="tab-btn"
+            onClick={() => setSubTab("donations")}
+          >
+            Received Donations ({donations.length})
+          </button>
+          <button
+            type="button"
+            aria-selected={subTab === "audit"}
+            className="tab-btn"
+            onClick={() => setSubTab("audit")}
+          >
+            Audit Trail ({auditLogs.length})
+          </button>
         </div>
-        <h2>Record received contribution</h2>
-        <div className="form-grid">
-          <label className="field">
-            Date received *
-            <input
-              name="received_date"
-              type="date"
-              required
-              defaultValue={new Date().toISOString().slice(0, 10)}
-            />
-          </label>
-          <label className="field">
-            Amount (INR) *
-            <input
-              name="amount_inr"
-              type="number"
-              step="0.01"
-              min="1"
-              required
-              placeholder="e.g. 2500"
-            />
-          </label>
-          <label className="field">
-            Donor name (admin private) *
-            <input
-              name="donor_name"
-              required
-              maxLength={160}
-              placeholder="Full name or Anonymous"
-            />
-          </label>
-          <label className="field">
-            Donor email (admin private)
-            <input name="donor_email" type="email" maxLength={255} />
-          </label>
-          <label className="field">
-            Donor phone (admin private)
-            <input name="donor_phone" maxLength={40} />
-          </label>
-          <label className="field">
-            Payment reference / UPI / Bank ID (private)
-            <input name="payment_reference" maxLength={120} />
-          </label>
-          <label className="field">
-            Purpose
-            <input
-              name="purpose"
-              maxLength={200}
-              defaultValue="General Education & Community Fund"
-            />
-          </label>
-          <label className="field">
-            Public acknowledgement label
-            <input name="public_label" maxLength={120} defaultValue="Community Supporter" />
-          </label>
-        </div>
-        <label className="consent">
-          <input type="checkbox" name="is_public_acknowledgement" />
-          <span>
-            Show public label &amp; amount on the Fund Transparency page (never shows email/phone).
-          </span>
-        </label>
-        <Button type="submit">Save received fund entry</Button>
-      </form>
 
-      <form className="form-panel" onSubmit={addAllocation}>
-        <div className="eyebrow">
-          <Receipt size={13} /> Allocations, bills &amp; receipts
-        </div>
-        <h2>Record expenditure or planned allocation + upload proof</h2>
-        <div className="form-grid">
-          <label className="field">
-            Entry type *
-            <select name="entry_type" defaultValue="expenditure">
-              <option value="expenditure">Spent / Expenditure</option>
-              <option value="planned_allocation">Planned Allocation</option>
-            </select>
-          </label>
-          <label className="field">
-            Category *
-            <select name="category" defaultValue={FUND_CATEGORIES[0]}>
-              {FUND_CATEGORIES.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            Date *
-            <input
-              name="entry_date"
-              type="date"
-              required
-              defaultValue={new Date().toISOString().slice(0, 10)}
-            />
-          </label>
-          <label className="field">
-            Amount (INR) *
-            <input
-              name="amount_inr"
-              type="number"
-              step="0.01"
-              min="0"
-              required
-              placeholder="e.g. 1200"
-            />
-          </label>
-          <label className="field wide">
-            Title *
-            <input
-              name="title"
-              required
-              maxLength={200}
-              placeholder="e.g. NCERT Notebooks & Stationery Set"
-            />
-          </label>
-          <label className="field">
-            Vendor / Beneficiary
-            <input
-              name="vendor_or_beneficiary"
-              maxLength={200}
-              placeholder="Shop name or community drive"
-            />
-          </label>
-          <label className="field">
-            Proof type
-            <select name="proof_type" defaultValue="bill">
-              <option value="bill">Bill</option>
-              <option value="receipt">Receipt</option>
-              <option value="photograph">Photograph</option>
-              <option value="document">Document / PDF</option>
-            </select>
-          </label>
-          <label className="field">
-            Upload bill / receipt / photo
-            <input name="proof_file" type="file" accept="image/*,.pdf" />
-          </label>
-          <label className="field">
-            Or paste proof link (optional)
-            <input name="proof_url" maxLength={2000} placeholder="https://..." />
-          </label>
-          <label className="field wide">
-            Proof caption
-            <input
-              name="proof_caption"
-              maxLength={300}
-              placeholder="Brief note about the bill or photo"
-            />
-          </label>
-          <label className="field wide">
-            Description of utilisation
-            <textarea name="description" maxLength={1500} />
-          </label>
-        </div>
-        <Button type="submit" className="mt-5" disabled={busy}>
-          {busy ? "Uploading proof…" : "Publish allocation / expenditure"}
-        </Button>
-      </form>
-
-      <div>
-        <h2>Published Fund Entries ({allocations.length})</h2>
-        <div className="mt-4 grid gap-3">
-          {allocations.map((a) => (
-            <div key={a.id} className="ledger-row">
-              <div>
-                <div className="ledger-badges">
-                  <span className="pill-badge pill-green">{a.entry_type}</span>
-                  <span className="pill-badge">{a.category}</span>
-                </div>
-                <strong className="block mt-2">{a.title}</strong>
-                <p className="text-xs text-muted-foreground">
-                  {a.entry_date} · {formatINR(Number(a.amount_inr))}
-                  {a.proof_url && (
-                    <>
-                      {" "}
-                      ·{" "}
-                      <a href={a.proof_url} target="_blank" rel="noreferrer" className="underline">
-                        View proof <ExternalLink size={11} className="inline" />
-                      </a>
-                    </>
-                  )}
-                </p>
-              </div>
-              <Button size="sm" variant="ghost" onClick={() => deleteAllocation(a)}>
-                <Trash2 size={14} /> Delete
-              </Button>
-            </div>
-          ))}
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setModalKind("donation")}>
+            <IndianRupee size={14} /> Record Donation
+          </Button>
+          <Button onClick={() => setModalKind("allocation")}>
+            <Plus size={14} /> Add Expense / Proof
+          </Button>
         </div>
       </div>
 
-      {auditLogs.length > 0 && (
-        <div>
-          <h2>Fund Audit Trail ({auditLogs.length})</h2>
-          <div className="mt-3 grid gap-2">
-            {auditLogs.slice(0, 15).map((log) => (
-              <div key={log.id} className="text-xs text-muted-foreground border rounded p-3">
-                <strong>{new Date(log.created_at).toLocaleString("en-IN")}</strong> · {log.action} ·{" "}
-                {log.summary}
-              </div>
-            ))}
-          </div>
+      {subTab === "allocations" && (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Title &amp; Vendor</th>
+                <th>Category</th>
+                <th>Type</th>
+                <th>Amount</th>
+                <th>Proof</th>
+                <th style={{ textAlign: "right" }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allocations.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="text-center text-muted-foreground py-8">
+                    No fund allocations recorded yet.
+                  </td>
+                </tr>
+              ) : (
+                allocations.map((a) => (
+                  <tr key={a.id}>
+                    <td className="whitespace-nowrap text-xs text-muted-foreground">
+                      {a.entry_date}
+                    </td>
+                    <td>
+                      <strong>{a.title}</strong>
+                      {a.vendor_or_beneficiary && (
+                        <div className="text-xs text-muted-foreground">
+                          {a.vendor_or_beneficiary}
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      <span className="pill-badge">{a.category}</span>
+                    </td>
+                    <td>
+                      <span
+                        className={`pill-badge ${a.entry_type === "expenditure" ? "pill-green" : "pill-gold"}`}
+                      >
+                        {a.entry_type === "expenditure" ? "Spent" : "Planned"}
+                      </span>
+                    </td>
+                    <td>
+                      <strong>{formatINR(Number(a.amount_inr))}</strong>
+                    </td>
+                    <td>
+                      {a.proof_url ? (
+                        <a
+                          href={a.proof_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-link"
+                        >
+                          View {a.proof_type ?? "proof"} <ExternalLink size={12} />
+                        </a>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">None</span>
+                      )}
+                    </td>
+                    <td style={{ textAlign: "right" }}>
+                      <Button size="sm" variant="ghost" onClick={() => deleteAllocation(a)}>
+                        <Trash2 size={14} />
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       )}
+
+      {subTab === "donations" && (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Donor (Private)</th>
+                <th>Purpose</th>
+                <th>Public Visibility</th>
+                <th>Reference</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {donations.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="text-center text-muted-foreground py-8">
+                    No donations recorded yet.
+                  </td>
+                </tr>
+              ) : (
+                donations.map((d) => (
+                  <tr key={d.id}>
+                    <td className="whitespace-nowrap text-xs text-muted-foreground">
+                      {d.received_date}
+                    </td>
+                    <td>
+                      <strong>{d.donor_name}</strong>
+                      {d.donor_email && (
+                        <div className="text-xs text-muted-foreground">{d.donor_email}</div>
+                      )}
+                    </td>
+                    <td>{d.purpose}</td>
+                    <td>
+                      <span
+                        className={`pill-badge ${d.is_public_acknowledgement ? "pill-green" : ""}`}
+                      >
+                        {d.is_public_acknowledgement ? d.public_label : "Private"}
+                      </span>
+                    </td>
+                    <td className="text-xs text-muted-foreground">{d.payment_reference || "—"}</td>
+                    <td>
+                      <strong>{formatINR(Number(d.amount_inr))}</strong>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {subTab === "audit" && (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Action</th>
+                <th>Summary</th>
+              </tr>
+            </thead>
+            <tbody>
+              {auditLogs.length === 0 ? (
+                <tr>
+                  <td colSpan={3} className="text-center text-muted-foreground py-8">
+                    No audit trail entries recorded yet.
+                  </td>
+                </tr>
+              ) : (
+                auditLogs.slice(0, 30).map((log) => (
+                  <tr key={log.id}>
+                    <td className="whitespace-nowrap text-xs text-muted-foreground">
+                      {new Date(log.created_at).toLocaleString("en-IN")}
+                    </td>
+                    <td>
+                      <span className="pill-badge">{log.action}</span>
+                    </td>
+                    <td>{log.summary}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <AdminModal
+        open={modalKind === "donation"}
+        title="Record Received Contribution"
+        subtitle="Donor email, phone, and payment references stay strictly private in Admin."
+        onClose={() => setModalKind(null)}
+      >
+        <form onSubmit={addDonation}>
+          <div className="form-grid">
+            <label className="field">
+              Date received *
+              <input
+                name="received_date"
+                type="date"
+                required
+                defaultValue={new Date().toISOString().slice(0, 10)}
+              />
+            </label>
+            <label className="field">
+              Amount (INR) *
+              <input
+                name="amount_inr"
+                type="number"
+                step="0.01"
+                min="1"
+                required
+                placeholder="e.g. 2500"
+              />
+            </label>
+            <label className="field">
+              Donor name (admin private) *
+              <input
+                name="donor_name"
+                required
+                maxLength={160}
+                placeholder="Full name or Anonymous"
+              />
+            </label>
+            <label className="field">
+              Donor email (admin private)
+              <input name="donor_email" type="email" maxLength={255} />
+            </label>
+            <label className="field">
+              Donor phone (admin private)
+              <input name="donor_phone" maxLength={40} />
+            </label>
+            <label className="field">
+              Payment / UPI / Bank ID (private)
+              <input name="payment_reference" maxLength={120} />
+            </label>
+            <label className="field">
+              Purpose
+              <input
+                name="purpose"
+                maxLength={200}
+                defaultValue="General Education & Community Fund"
+              />
+            </label>
+            <label className="field">
+              Public acknowledgement label
+              <input name="public_label" maxLength={120} defaultValue="Community Supporter" />
+            </label>
+          </div>
+          <label className="consent">
+            <input type="checkbox" name="is_public_acknowledgement" />
+            <span>Show public label &amp; amount on the Fund Transparency page.</span>
+          </label>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setModalKind(null)}>
+              Cancel
+            </Button>
+            <Button type="submit">Save Contribution</Button>
+          </div>
+        </form>
+      </AdminModal>
+
+      <AdminModal
+        open={modalKind === "allocation"}
+        title="Add Expense or Planned Allocation"
+        subtitle="Attach bill, receipt, or photograph proofs published to the open ledger."
+        onClose={() => setModalKind(null)}
+      >
+        <form onSubmit={addAllocation}>
+          <div className="form-grid">
+            <label className="field">
+              Entry type *
+              <select name="entry_type" defaultValue="expenditure">
+                <option value="expenditure">Spent / Expenditure</option>
+                <option value="planned_allocation">Planned Allocation</option>
+              </select>
+            </label>
+            <label className="field">
+              Category *
+              <select name="category" defaultValue={FUND_CATEGORIES[0]}>
+                {FUND_CATEGORIES.map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              Date *
+              <input
+                name="entry_date"
+                type="date"
+                required
+                defaultValue={new Date().toISOString().slice(0, 10)}
+              />
+            </label>
+            <label className="field">
+              Amount (INR) *
+              <input
+                name="amount_inr"
+                type="number"
+                step="0.01"
+                min="0"
+                required
+                placeholder="e.g. 1200"
+              />
+            </label>
+            <label className="field wide">
+              Title *
+              <input
+                name="title"
+                required
+                maxLength={200}
+                placeholder="e.g. NCERT Notebooks & Stationery Set"
+              />
+            </label>
+            <label className="field">
+              Vendor / Beneficiary
+              <input
+                name="vendor_or_beneficiary"
+                maxLength={200}
+                placeholder="Shop name or community drive"
+              />
+            </label>
+            <label className="field">
+              Proof type
+              <select name="proof_type" defaultValue="bill">
+                <option value="bill">Bill</option>
+                <option value="receipt">Receipt</option>
+                <option value="photograph">Photograph</option>
+                <option value="document">Document / PDF</option>
+              </select>
+            </label>
+            <label className="field">
+              Upload bill / receipt / photo
+              <input name="proof_file" type="file" accept="image/*,.pdf" />
+            </label>
+            <label className="field">
+              Or paste proof link (optional)
+              <input name="proof_url" maxLength={2000} placeholder="https://..." />
+            </label>
+            <label className="field wide">
+              Proof caption
+              <input name="proof_caption" maxLength={300} placeholder="Brief note about the bill" />
+            </label>
+            <label className="field wide">
+              Description of utilisation
+              <textarea name="description" maxLength={1500} />
+            </label>
+          </div>
+          <div className="mt-6 flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setModalKind(null)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={busy}>
+              <Receipt size={14} /> {busy ? "Uploading…" : "Publish Entry"}
+            </Button>
+          </div>
+        </form>
+      </AdminModal>
     </div>
   );
 }
@@ -746,6 +991,8 @@ export function AdminStoriesAndPhotosPanel({
   onStatus: (msg: string, isErr?: boolean) => void;
 }) {
   const qc = useQueryClient();
+  const [subTab, setSubTab] = useState<"stories" | "photos">("stories");
+  const [modalKind, setModalKind] = useState<"story" | "photo" | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function addStory(e: FormEvent<HTMLFormElement>) {
@@ -818,6 +1065,7 @@ export function AdminStoriesAndPhotosPanel({
       }
 
       form.reset();
+      setModalKind(null);
       onStatus("Success story published.");
       qc.invalidateQueries({ queryKey: ["admin-dashboard"] });
       qc.invalidateQueries({ queryKey: ["success-stories"] });
@@ -887,6 +1135,7 @@ export function AdminStoriesAndPhotosPanel({
       }
 
       form.reset();
+      setModalKind(null);
       onStatus("Activity photo added to homepage gallery.");
       qc.invalidateQueries({ queryKey: ["admin-dashboard"] });
       qc.invalidateQueries({ queryKey: ["home-activity-photos"] });
@@ -929,162 +1178,263 @@ export function AdminStoriesAndPhotosPanel({
   }
 
   return (
-    <div className="space-y-10">
-      <form className="form-panel" onSubmit={addStory}>
-        <div className="eyebrow">
-          <Award size={13} /> Success stories
-        </div>
-        <h2>Publish a safeguarding-compliant success story</h2>
-        <div className="form-grid">
-          <label className="field wide">
-            Story title *
-            <input
-              name="title"
-              required
-              maxLength={200}
-              placeholder="e.g. From hesitant reader to confident speaker"
-            />
-          </label>
-          <label className="field">
-            Focus area *
-            <select name="focus_area" defaultValue={STORY_FOCUS_AREAS[0]}>
-              {STORY_FOCUS_AREAS.map((a) => (
-                <option key={a}>{a}</option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            Class / Age group
-            <input name="class_or_age" maxLength={80} placeholder="e.g. Class 7 learner" />
-          </label>
-          <label className="field">
-            Learner display name (ignored if anonymous)
-            <input name="learner_display_name" maxLength={120} defaultValue="Anonymous Learner" />
-          </label>
-          <label className="field">
-            Optional photo upload
-            <input name="image_file" type="file" accept="image/*" />
-          </label>
-          <label className="field wide">
-            Journey &amp; background *
-            <textarea name="story_summary" required maxLength={2000} />
-          </label>
-          <label className="field wide">
-            Support &amp; mentorship provided *
-            <textarea name="support_given" required maxLength={1000} />
-          </label>
-          <label className="field wide">
-            Achievement / progress milestone *
-            <textarea name="achievement_or_progress" required maxLength={1000} />
-          </label>
-          <label className="field wide">
-            Reflection quote (optional)
-            <input name="quote" maxLength={500} />
-          </label>
-        </div>
-        <label className="consent">
-          <input type="checkbox" name="is_anonymous" defaultChecked />
-          <span>Publish anonymously as “Anonymous Learner” (recommended for minors).</span>
-        </label>
-        <label className="consent">
-          <input type="checkbox" name="guardian_consent_verified" />
-          <span>
-            Guardian consent verified for publishing name/photo (required if non-anonymous).
-          </span>
-        </label>
-        <Button type="submit" disabled={busy}>
-          Publish success story
-        </Button>
-      </form>
-
-      <form className="form-panel" onSubmit={addPhoto}>
-        <div className="eyebrow">
-          <Camera size={13} /> Homepage teaching &amp; mentor photos
-        </div>
-        <h2>Upload real teaching, mentor &amp; activity photos</h2>
-        <div className="form-grid">
-          <label className="field">
-            Photo title *
-            <input
-              name="title"
-              required
-              maxLength={160}
-              placeholder="e.g. Tammana leading English circle"
-            />
-          </label>
-          <label className="field">
-            Category *
-            <select name="category" defaultValue={PHOTO_CATEGORIES[0]}>
-              {PHOTO_CATEGORIES.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            Upload photo
-            <input name="photo_file" type="file" accept="image/*" />
-          </label>
-          <label className="field">
-            Or image URL
-            <input name="image_url" maxLength={2000} />
-          </label>
-          <label className="field wide">
-            Caption *
-            <textarea
-              name="caption"
-              required
-              maxLength={600}
-              placeholder="Describe the teaching or community activity shown…"
-            />
-          </label>
-        </div>
-        <label className="consent">
-          <input type="checkbox" name="consent_verified" required />
-          <span>
-            Parent/guardian and participant consent verified for publishing this photograph.
-          </span>
-        </label>
-        <Button type="submit" disabled={busy}>
-          Publish to homepage gallery
-        </Button>
-      </form>
-
-      <div className="grid gap-6">
-        <div>
-          <h2>Published Stories ({stories.length})</h2>
-          <div className="mt-3 grid gap-3">
-            {stories.map((s) => (
-              <div key={s.id} className="ledger-row">
-                <div>
-                  <strong>{s.title}</strong> (
-                  {s.is_anonymous ? "Anonymous" : s.learner_display_name})
-                  <p className="text-xs text-muted-foreground">{s.focus_area}</p>
-                </div>
-                <Button size="sm" variant="ghost" onClick={() => deleteStory(s.id)}>
-                  <Trash2 size={14} /> Delete
-                </Button>
-              </div>
-            ))}
-          </div>
+    <div className="space-y-6">
+      <div className="admin-toolbar">
+        <div className="admin-tabs" style={{ borderBottom: 0, paddingBottom: 0, marginBottom: 0 }}>
+          <button
+            type="button"
+            aria-selected={subTab === "stories"}
+            className="tab-btn"
+            onClick={() => setSubTab("stories")}
+          >
+            Success Stories ({stories.length})
+          </button>
+          <button
+            type="button"
+            aria-selected={subTab === "photos"}
+            className="tab-btn"
+            onClick={() => setSubTab("photos")}
+          >
+            Homepage Gallery Photos ({photos.length})
+          </button>
         </div>
 
-        <div>
-          <h2>Homepage Gallery Photos ({photos.length})</h2>
-          <div className="mt-3 grid gap-3">
-            {photos.map((p) => (
-              <div key={p.id} className="ledger-row">
-                <div>
-                  <strong>{p.title}</strong> · <span className="pill-badge">{p.category}</span>
-                  <p className="text-xs text-muted-foreground mt-1">{p.caption}</p>
-                </div>
-                <Button size="sm" variant="ghost" onClick={() => deletePhoto(p.id)}>
-                  <Trash2 size={14} /> Delete
-                </Button>
-              </div>
-            ))}
-          </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setModalKind("photo")}>
+            <Camera size={14} /> Upload Gallery Photo
+          </Button>
+          <Button onClick={() => setModalKind("story")}>
+            <Plus size={14} /> Add Success Story
+          </Button>
         </div>
       </div>
+
+      {subTab === "stories" && (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Learner</th>
+                <th>Focus Area</th>
+                <th>Privacy Mode</th>
+                <th style={{ textAlign: "right" }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stories.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="text-center text-muted-foreground py-8">
+                    No custom success stories added yet.
+                  </td>
+                </tr>
+              ) : (
+                stories.map((s) => (
+                  <tr key={s.id}>
+                    <td>
+                      <strong>{s.title}</strong>
+                    </td>
+                    <td>{s.is_anonymous ? "Anonymous Learner" : s.learner_display_name}</td>
+                    <td>
+                      <span className="pill-badge">{s.focus_area}</span>
+                    </td>
+                    <td>
+                      <span className="pill-badge pill-green">
+                        {s.is_anonymous ? "Anonymous" : "Consent Verified"}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: "right" }}>
+                      <Button size="sm" variant="ghost" onClick={() => deleteStory(s.id)}>
+                        <Trash2 size={14} />
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {subTab === "photos" && (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Preview</th>
+                <th>Title</th>
+                <th>Category</th>
+                <th>Caption</th>
+                <th style={{ textAlign: "right" }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {photos.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="text-center text-muted-foreground py-8">
+                    No extra gallery photos uploaded yet.
+                  </td>
+                </tr>
+              ) : (
+                photos.map((p) => (
+                  <tr key={p.id}>
+                    <td>
+                      <img
+                        src={p.image_url}
+                        alt={p.title}
+                        className="h-10 w-16 rounded object-cover border"
+                      />
+                    </td>
+                    <td>
+                      <strong>{p.title}</strong>
+                    </td>
+                    <td>
+                      <span className="pill-badge">{p.category}</span>
+                    </td>
+                    <td className="text-xs text-muted-foreground">{p.caption}</td>
+                    <td style={{ textAlign: "right" }}>
+                      <Button size="sm" variant="ghost" onClick={() => deletePhoto(p.id)}>
+                        <Trash2 size={14} />
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <AdminModal
+        open={modalKind === "story"}
+        title="Add Safeguarding-Verified Success Story"
+        subtitle="Use Anonymous Learner by default for minors unless guardian consent is verified."
+        onClose={() => setModalKind(null)}
+      >
+        <form onSubmit={addStory}>
+          <div className="form-grid">
+            <label className="field wide">
+              Story title *
+              <input
+                name="title"
+                required
+                maxLength={200}
+                placeholder="e.g. From hesitant reader to confident speaker"
+              />
+            </label>
+            <label className="field">
+              Focus area *
+              <select name="focus_area" defaultValue={STORY_FOCUS_AREAS[0]}>
+                {STORY_FOCUS_AREAS.map((a) => (
+                  <option key={a}>{a}</option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              Class / Age group
+              <input name="class_or_age" maxLength={80} placeholder="e.g. Class 7 learner" />
+            </label>
+            <label className="field">
+              Learner display name
+              <input name="learner_display_name" maxLength={120} defaultValue="Anonymous Learner" />
+            </label>
+            <label className="field">
+              Optional photo upload
+              <input name="image_file" type="file" accept="image/*" />
+            </label>
+            <label className="field wide">
+              Journey &amp; background *
+              <textarea name="story_summary" required maxLength={2000} />
+            </label>
+            <label className="field wide">
+              Support &amp; mentorship provided *
+              <textarea name="support_given" required maxLength={1000} />
+            </label>
+            <label className="field wide">
+              Achievement / progress milestone *
+              <textarea name="achievement_or_progress" required maxLength={1000} />
+            </label>
+            <label className="field wide">
+              Reflection quote (optional)
+              <input name="quote" maxLength={500} />
+            </label>
+          </div>
+          <label className="consent">
+            <input type="checkbox" name="is_anonymous" defaultChecked />
+            <span>Publish anonymously as “Anonymous Learner” (recommended for minors).</span>
+          </label>
+          <label className="consent">
+            <input type="checkbox" name="guardian_consent_verified" />
+            <span>Guardian consent verified for publishing name/photo (if not anonymous).</span>
+          </label>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setModalKind(null)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={busy}>
+              <Award size={14} /> {busy ? "Publishing…" : "Publish Story"}
+            </Button>
+          </div>
+        </form>
+      </AdminModal>
+
+      <AdminModal
+        open={modalKind === "photo"}
+        title="Upload Homepage Teaching Photo"
+        subtitle="Only publish photographs with verified parent/guardian and participant consent."
+        onClose={() => setModalKind(null)}
+      >
+        <form onSubmit={addPhoto}>
+          <div className="form-grid">
+            <label className="field">
+              Photo title *
+              <input
+                name="title"
+                required
+                maxLength={160}
+                placeholder="e.g. Tammana leading English circle"
+              />
+            </label>
+            <label className="field">
+              Category *
+              <select name="category" defaultValue={PHOTO_CATEGORIES[0]}>
+                {PHOTO_CATEGORIES.map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              Upload photo
+              <input name="photo_file" type="file" accept="image/*" />
+            </label>
+            <label className="field">
+              Or image URL
+              <input name="image_url" maxLength={2000} />
+            </label>
+            <label className="field wide">
+              Caption *
+              <textarea
+                name="caption"
+                required
+                maxLength={600}
+                placeholder="Describe the teaching or community activity shown…"
+              />
+            </label>
+          </div>
+          <label className="consent">
+            <input type="checkbox" name="consent_verified" required />
+            <span>Parent/guardian and participant consent verified.</span>
+          </label>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setModalKind(null)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={busy}>
+              <Camera size={14} /> {busy ? "Uploading…" : "Publish Photo"}
+            </Button>
+          </div>
+        </form>
+      </AdminModal>
     </div>
   );
 }

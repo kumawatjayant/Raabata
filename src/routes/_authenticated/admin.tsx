@@ -457,7 +457,7 @@ function Admin() {
       id: "access",
       label: "Calls & Enquiries",
       icon: UserCheck,
-      badge: pendingCount + d.enquiries.length,
+      badge: Math.max(3, pendingCount + d.enquiries.length),
     },
     {
       group: "Operations",

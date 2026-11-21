@@ -7,11 +7,13 @@ import {
   FileText,
   GraduationCap,
   IndianRupee,
+  Plus,
   Search,
   UserPlus,
   Users,
   Video,
 } from "lucide-react";
+import { AdminModal } from "@/components/admin-modal";
 import { Button } from "@/components/ui/button";
 import { StudentProfileDetail } from "@/components/student-profile-detail";
 import {
@@ -120,43 +122,64 @@ export function AdminExecutiveOverview({
         </article>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="form-panel">
-          <div className="section-head mb-4">
-            <div>
-              <div className="eyebrow">Academic cohort</div>
-              <h2>Student progress snapshot</h2>
-            </div>
-            <button type="button" className="text-link" onClick={() => onNavigate("academics")}>
-              Open full directory <ArrowRight size={14} />
-            </button>
-          </div>
-          {academicProfiles.length === 0 ? (
-            <div className="empty-state">No student academic profiles created yet.</div>
-          ) : (
-            <div className="space-y-3">
-              {academicProfiles.slice(0, 5).map((st) => (
-                <div key={st.studentId} className="ledger-row" style={{ padding: 14 }}>
-                  <div className="min-w-0">
-                    <div className="ledger-badges">
+      <section>
+        <div className="admin-toolbar">
+          <h2>Student Progress Snapshot</h2>
+          <button type="button" className="text-link" onClick={() => onNavigate("academics")}>
+            Open full directory <ArrowRight size={14} />
+          </button>
+        </div>
+        {academicProfiles.length === 0 ? (
+          <div className="empty-state">No student academic profiles created yet.</div>
+        ) : (
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Student ID</th>
+                  <th>Name</th>
+                  <th>Class</th>
+                  <th>Academic Avg</th>
+                  <th>Attendance</th>
+                  <th>Tier</th>
+                  <th style={{ textAlign: "right" }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {academicProfiles.slice(0, 6).map((st) => (
+                  <tr key={st.studentId}>
+                    <td>
                       <span className="pill-badge pill-green">{st.studentCode}</span>
-                      <span className="pill-badge">{st.classGrade}</span>
-                    </div>
-                    <strong className="block mt-1.5 text-sm">{st.fullName}</strong>
-                    <span className="text-xs text-muted-foreground">
-                      Academic: {st.overallPercentage}% ({st.progressTier}) · Attendance:{" "}
-                      {st.attendancePercentage}%
-                    </span>
-                  </div>
-                  <Button size="sm" variant="outline" onClick={() => onOpenStudent(st.studentId)}>
-                    Inspect <ArrowRight size={13} />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
+                    </td>
+                    <td>
+                      <strong>{st.fullName}</strong>
+                    </td>
+                    <td>{st.classGrade}</td>
+                    <td>
+                      <strong>{st.overallPercentage}%</strong>
+                    </td>
+                    <td>{st.attendancePercentage}%</td>
+                    <td>
+                      <span className="pill-badge">{st.progressTier}</span>
+                    </td>
+                    <td style={{ textAlign: "right" }}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => onOpenStudent(st.studentId)}
+                      >
+                        Open <ArrowRight size={13} />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
+      <div className="grid gap-6 lg:grid-cols-2">
         <section className="form-panel">
           <div className="section-head mb-4">
             <div>
@@ -164,7 +187,7 @@ export function AdminExecutiveOverview({
               <h2>Fund allocation breakdown</h2>
             </div>
             <button type="button" className="text-link" onClick={() => onNavigate("funds")}>
-              Manage funds &amp; proofs <ArrowRight size={14} />
+              Manage funds <ArrowRight size={14} />
             </button>
           </div>
           <div className="space-y-3">
@@ -186,9 +209,7 @@ export function AdminExecutiveOverview({
             ))}
           </div>
         </section>
-      </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
         <section className="form-panel">
           <div className="eyebrow">Quick actions</div>
           <h2>Common administrative workflows</h2>
@@ -229,27 +250,16 @@ export function AdminExecutiveOverview({
               className="justify-start"
               onClick={() => onNavigate("access")}
             >
-              <CheckCircle2 size={15} /> Review Enquiries &amp; Roles
+              <CheckCircle2 size={15} /> Recent Calls &amp; Enquiries
             </Button>
           </div>
-        </section>
-
-        <section className="form-panel">
-          <div className="eyebrow">Governance &amp; audit trail</div>
-          <h2>Recent financial audit entries</h2>
-          {auditLogs.length === 0 ? (
-            <div className="empty-state mt-4">No audit trail entries recorded yet.</div>
-          ) : (
-            <div className="mt-4 space-y-2">
-              {auditLogs.slice(0, 5).map((log) => (
-                <div key={log.id} className="text-xs border rounded-lg p-3 bg-muted/40">
-                  <div className="flex justify-between text-muted-foreground mb-1">
-                    <span className="font-semibold text-primary">{log.action}</span>
-                    <span>{new Date(log.created_at).toLocaleDateString("en-IN")}</span>
-                  </div>
-                  <div>{log.summary}</div>
-                </div>
-              ))}
+          {auditLogs.length > 0 && (
+            <div className="mt-5 pt-4 border-t">
+              <div className="text-xs font-semibold mb-2 text-primary">Latest Financial Audit</div>
+              <div className="text-xs text-muted-foreground">
+                {new Date(auditLogs[0]!.created_at).toLocaleDateString("en-IN")} ·{" "}
+                <strong>{auditLogs[0]!.action}</strong> · {auditLogs[0]!.summary}
+              </div>
             </div>
           )}
         </section>
@@ -273,7 +283,7 @@ export function AdminEmbeddedAcademicsPanel({
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
   const [search, setSearch] = useState("");
   const [classFilter, setClassFilter] = useState("All classes");
-  const [showAdd, setShowAdd] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const selected = profiles.find((p) => p.studentId === selectedId) ?? null;
@@ -328,7 +338,7 @@ export function AdminEmbeddedAcademicsPanel({
         userId,
       );
       form.reset();
-      setShowAdd(false);
+      setShowAddModal(false);
       setSelectedId(created.studentId);
       onStatus(`Created profile ${created.studentCode} for ${created.fullName}.`);
       await qc.invalidateQueries({ queryKey: ["admin-dashboard"] });
@@ -353,22 +363,94 @@ export function AdminEmbeddedAcademicsPanel({
 
   return (
     <div className="space-y-6">
-      <div className="section-head">
+      <div className="admin-toolbar">
         <div>
           <h2>Student Academic Profiles ({filtered.length})</h2>
-          <p className="section-copy">
-            Open any student to record examination marks, update the attendance calendar, review
-            holistic skill development, or export a PDF Progress Report.
+          <p className="text-xs text-muted-foreground mt-1">
+            Click Manage Record on any student to edit marks, attendance, skills, or download PDF
+            reports.
           </p>
         </div>
-        <Button onClick={() => setShowAdd(!showAdd)}>
-          <UserPlus size={15} /> {showAdd ? "Close registration" : "Register new student"}
+        <Button onClick={() => setShowAddModal(true)}>
+          <Plus size={15} /> Register New Student
         </Button>
       </div>
 
-      {showAdd && (
-        <form className="form-panel" onSubmit={handleCreate}>
-          <h2>Register New Student Profile</h2>
+      <div className="filters" style={{ gridTemplateColumns: "2fr 1fr" }}>
+        <div className="search-field">
+          <Search size={16} />
+          <input
+            aria-label="Search student profiles"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name, Student ID, or school…"
+          />
+        </div>
+        <select
+          aria-label="Filter by class"
+          value={classFilter}
+          onChange={(e) => setClassFilter(e.target.value)}
+        >
+          {classOptions.map((c) => (
+            <option key={c}>{c}</option>
+          ))}
+        </select>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="empty-state">No student academic profiles match your filter.</div>
+      ) : (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Student ID</th>
+                <th>Student Name</th>
+                <th>Class</th>
+                <th>School</th>
+                <th>Academic Avg</th>
+                <th>Attendance</th>
+                <th>Tier</th>
+                <th style={{ textAlign: "right" }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((st) => (
+                <tr key={st.studentId}>
+                  <td>
+                    <span className="pill-badge pill-green">{st.studentCode}</span>
+                  </td>
+                  <td>
+                    <strong>{st.fullName}</strong>
+                  </td>
+                  <td>{st.classGrade}</td>
+                  <td className="text-xs text-muted-foreground">{st.schoolName}</td>
+                  <td>
+                    <strong>{st.overallPercentage}%</strong>
+                  </td>
+                  <td>{st.attendancePercentage}%</td>
+                  <td>
+                    <span className="pill-badge">{st.progressTier}</span>
+                  </td>
+                  <td style={{ textAlign: "right" }}>
+                    <Button variant="outline" size="sm" onClick={() => setSelectedId(st.studentId)}>
+                      Manage Record <ArrowRight size={13} />
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <AdminModal
+        open={showAddModal}
+        title="Register New Student Profile"
+        subtitle="Create a tracked academic record for marks, attendance, goals, and PDF progress cards."
+        onClose={() => setShowAddModal(false)}
+      >
+        <form onSubmit={handleCreate}>
           <div className="form-grid">
             <label className="field">
               Full Name *
@@ -415,75 +497,16 @@ export function AdminEmbeddedAcademicsPanel({
               <textarea name="educationalGoals" />
             </label>
           </div>
-          <Button type="submit" className="mt-5" disabled={busy}>
-            {busy ? "Creating…" : "Create Academic Profile"}
-          </Button>
-        </form>
-      )}
-
-      <div className="filters" style={{ gridTemplateColumns: "2fr 1fr" }}>
-        <div className="search-field">
-          <Search size={16} />
-          <input
-            aria-label="Search student profiles"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, Student ID or school…"
-          />
-        </div>
-        <select
-          aria-label="Filter by class"
-          value={classFilter}
-          onChange={(e) => setClassFilter(e.target.value)}
-        >
-          {classOptions.map((c) => (
-            <option key={c}>{c}</option>
-          ))}
-        </select>
-      </div>
-
-      <div className="student-dir-grid">
-        {filtered.map((st) => (
-          <article key={st.studentId} className="student-card">
-            <div className="flex items-start gap-3">
-              <div className="student-avatar student-avatar-fallback" aria-hidden="true">
-                {st.fullName.slice(0, 2).toUpperCase()}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="ledger-badges">
-                  <span className="pill-badge pill-green">{st.studentCode}</span>
-                  <span className="pill-badge">{st.classGrade}</span>
-                </div>
-                <h3 className="mt-2 text-base font-semibold truncate">{st.fullName}</h3>
-                <p className="text-xs text-muted-foreground truncate">{st.schoolName}</p>
-              </div>
-            </div>
-            <div className="mt-4 space-y-2 text-xs">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Academic Avg</span>
-                <strong>
-                  {st.overallPercentage}% · {st.progressTier}
-                </strong>
-              </div>
-              <div className="fund-bar">
-                <div className="fund-bar-fill" style={{ width: `${st.overallPercentage}%` }} />
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Attendance</span>
-                <strong>{st.attendancePercentage}%</strong>
-              </div>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full mt-4"
-              onClick={() => setSelectedId(st.studentId)}
-            >
-              Manage Academic Record <ArrowRight size={13} />
+          <div className="mt-6 flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setShowAddModal(false)}>
+              Cancel
             </Button>
-          </article>
-        ))}
-      </div>
+            <Button type="submit" disabled={busy}>
+              {busy ? "Creating…" : "Create Academic Profile"}
+            </Button>
+          </div>
+        </form>
+      </AdminModal>
     </div>
   );
 }
