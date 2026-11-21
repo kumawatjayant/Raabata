@@ -6,7 +6,7 @@
 [![Live Web Application](https://img.shields.io/badge/Live%20App-rabata--hub--connect-emerald?style=for-the-badge&logo=vercel)](https://rabata-hub-connect-main.vercel.app)
 [![React 19](https://img.shields.io/badge/React-19.2-blue?style=for-the-badge&logo=react)](https://react.dev)
 [![TanStack Start](https://img.shields.io/badge/TanStack-Start%20%26%20Router-orange?style=for-the-badge)](https://tanstack.com/start)
-[![Sarvam AI](https://img.shields.io/badge/Powered%20By-Sarvam%20AI%20Voice-purple?style=for-the-badge)](https://sarvam.ai)
+[![AI Voice](https://img.shields.io/badge/Conversational%20AI-Real--Time%20Voice-purple?style=for-the-badge)](#)
 [![Supabase](https://img.shields.io/badge/Database-Supabase%20RLS-3ecf8e?style=for-the-badge&logo=supabase)](https://supabase.com)
 
 ---
@@ -27,14 +27,14 @@ Our mission is to eliminate barriers to quality education, ensure complete safeg
 ## 🌟 Key Platform Features
 
 ### 1. 🎙️ AI Spoken English Buddy (`/learn`)
-- **Conversational Practice Partner**: An interactive, friend-like tutor powered by **Sarvam AI Samvaad Voice Agents** (`English-Bud-5427078a-fa90`).
-- **Zero-Clutter Visual Orb UI**: Powered by `orb-ui` with real-time radial audio responsiveness, smooth listening/speaking state transitions, and automatic ambient glow.
+- **Conversational Practice Partner**: An interactive, friend-like AI companion for everyday conversational English practice with gentle corrections and natural dialogue flow.
+- **Zero-Clutter Visual Orb UI**: Powered by `orb-ui` with real-time radial audio responsiveness, smooth listening/speaking state transitions, and dynamic ambient glow.
 - **Bi-directional Low-Latency Streaming**: 16kHz PCM duplex audio streaming over signed WebSockets with client-side resampling, energy-based voice activity detection (VAD), and silence keepalive packets.
 
 ### 2. 🤖 Multilingual Inbound Call & Web Bot Integration
-- **Direct Phone & Web Intake**: Community members can speak to Rabata’s AI agent in **Hindi, Punjabi, or English** to enquire about classes or volunteer.
-- **Transcript Parsing & Entity Extraction**: The server processes inbound webhook payloads, extracts applicant names, contact info, grade levels, and learning goals, and records them with full transcripts.
-- **One-Click Verified Enrollment**: Administrators can review the AI-captured transcript and immediately enroll the student into their academic cohort with pre-filled profile details.
+- **Direct Phone & Web Intake**: Community members can speak to Rabata’s voice assistant in **Hindi, Punjabi, or English** to enquire about classes or volunteer.
+- **Transcript Parsing & Entity Extraction**: The platform processes inbound webhook payloads, extracts applicant names, contact info, grade levels, and learning goals, and records them with full transcripts.
+- **One-Click Verified Enrollment**: Administrators can review the captured transcript and immediately enroll the student into their academic cohort with pre-filled profile details.
 
 ### 3. 🛡️ Central Admin Console & Governance OS (`/admin`)
 Unified under a 3-tier layout (Executive KPIs $\rightarrow$ Control & Search Bar $\rightarrow$ Data Grids):
@@ -59,7 +59,7 @@ Unified under a 3-tier layout (Executive KPIs $\rightarrow$ Control & Search Bar
 | **Frontend Framework** | [React 19](https://react.dev), [TanStack Start](https://tanstack.com/start), [TanStack Router](https://tanstack.com/router) |
 | **Styling & Motion** | [Tailwind CSS v4](https://tailwindcss.com), Custom Tech-Luxury Design System, Lucide React |
 | **Interactive UI** | [Orb UI](https://github.com), Radix UI Primitives, Recharts |
-| **Voice & AI** | [Sarvam AI Samvaad Voice Runtime](https://sarvam.ai), Real-time 16kHz PCM Duplex Audio Streaming |
+| **Voice & Audio** | Real-time 16kHz PCM Duplex Audio Streaming, WebSocket Voice Runtime, Web Audio API |
 | **Database & Auth** | [Supabase](https://supabase.com) (PostgreSQL, Row-Level Security, Server RPCs) |
 | **Build & Runtime** | [Vite](https://vite.dev), [Nitro](https://nitro.unjs.io), Vercel Serverless |
 | **Testing** | [Vitest](https://vitest.dev), React Testing Library |
@@ -90,7 +90,7 @@ Unified under a 3-tier layout (Executive KPIs $\rightarrow$ Control & Search Bar
    ```bash
    cp .env.example .env
    ```
-   Add your respective Supabase and Sarvam AI credentials in `.env` (refer to `.env.example` for details).
+   Add your respective database and voice API credentials in `.env` (refer to `.env.example` for details).
 
 4. **Start the development server**:
    ```bash
@@ -113,13 +113,13 @@ Unified under a 3-tier layout (Executive KPIs $\rightarrow$ Control & Search Bar
 │   │   ├── admin-content.tsx          # Lecture library & community gallery
 │   │   ├── admin-directory.tsx        # Student academic profiles & rosters
 │   │   ├── admin-overview.tsx         # Executive KPI dashboards
-│   │   ├── admin-sarvam-tracker.tsx   # Live calls, transcripts & enrollment modal
+│   │   ├── admin-calls-tracker.tsx    # Inbound calls, transcripts & enrollment modal
 │   │   ├── english-speaking-tutor.tsx # Spoken English Orb interface
 │   │   └── site-shell.tsx             # Shared navigation, header, and footer
 │   ├── integrations/          # Supabase client and database types
 │   ├── lib/                   # Business logic, audio processing & API services
-│   │   ├── sarvam-voice-client.ts     # 16kHz duplex audio & WebSocket client
-│   │   ├── server-api.ts              # Server-side API endpoints & Sarvam handlers
+│   │   ├── voice-client.ts            # Real-time duplex audio & WebSocket voice client
+│   │   ├── server-api.ts              # Server-side API endpoints & voice webhook handlers
 │   │   └── site.ts                    # Global site configuration & metadata
 │   ├── routes/                # TanStack Start file-based routing
 │   │   ├── _authenticated/            # Protected admin and account views
