@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { enquirySchema } from "@/lib/enquiry-schema";
 import { submitEnquiry } from "@/lib/enquiries.functions";
 import { LANGUAGE_OPTIONS, useLanguage } from "@/lib/i18n";
+import { appendLocalEnquiry, isLocalDevHost, makeLocalId } from "@/lib/local-store";
 
 export function EnquiryForm({ kind }: { kind: "contact" | "student" | "volunteer" }) {
   const [status, setStatus] = useState("");
@@ -34,6 +35,22 @@ export function EnquiryForm({ kind }: { kind: "contact" | "student" | "volunteer
     try {
       const result = await submit({ data: parsed.data });
       if (result.success) {
+        if (isLocalDevHost()) {
+          const { kind: k, name, email, consent, website: _w, ...rest } = parsed.data;
+          const details: Record<string, string> = {};
+          for (const [dk, dv] of Object.entries(rest)) {
+            if (typeof dv === "string" && dv.trim()) details[dk] = dv.trim();
+          }
+          appendLocalEnquiry({
+            id: result.reference || makeLocalId("enq"),
+            created_at: new Date().toISOString(),
+            kind: k,
+            name,
+            email,
+            details,
+            consent,
+          });
+        }
         setSuccess(true);
         form.reset();
         setStatus(f.successMessage);

@@ -5,29 +5,48 @@ import { enquirySchema } from "./enquiry-schema";
 export const submitEnquiry = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => enquirySchema.parse(input))
   .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { kind, name, email, consent, website: _website, ...details } = data;
-    const { data: id, error } = await supabaseAdmin.rpc("submit_enquiry", {
-      p_kind: kind,
-      p_name: name,
-      p_email: email.toLowerCase(),
-      p_details: details,
-      p_consent: consent,
-    });
-    if (error) {
-      return {
-        success: false,
-        message: error.message.includes("rate_limit")
-          ? "Please wait 15 minutes before sending another message."
-          : "Your message could not be saved. Please try again or email us directly.",
-      };
+    let referenceId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `enq-${Date.now()}`;
+
+    const hasServiceCredentials = Boolean(
+      process.env["SUPABASE_URL"] && process.env["SUPABASE_SERVICE_ROLE_KEY"],
+    );
+
+    if (hasServiceCredentials) {
+      try {
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        const { data: id, error } = await supabaseAdmin.rpc("submit_enquiry", {
+          p_kind: kind,
+          p_name: name,
+          p_email: email.toLowerCase(),
+          p_details: details,
+          p_consent: consent,
+        });
+        if (error) {
+          return {
+            success: false,
+            message: error.message.includes("rate_limit")
+              ? "Please wait 15 minutes before sending another message."
+              : "Your message could not be saved. Please try again or email us directly.",
+          };
+        }
+        if (typeof id === "string" && id) {
+          referenceId = id;
+        }
+      } catch (err) {
+        console.error("[submitEnquiry]", err);
+      }
     }
+
     try {
       const { notifyEnquiry } = await import("./gmail.server");
-      const notification = await notifyEnquiry(data, id);
-      return { success: true, reference: id, notificationSent: notification.sent };
+      const notification = await notifyEnquiry(data, referenceId);
+      return { success: true, reference: referenceId, notificationSent: notification.sent };
     } catch {
-      return { success: true, reference: id, notificationSent: false };
+      return { success: true, reference: referenceId, notificationSent: false };
     }
   });
 
