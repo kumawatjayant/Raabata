@@ -12,6 +12,7 @@ import {
   parseSarvamWebhookPayload,
   RABATA_SARVAM_SYSTEM_PROMPT,
 } from "@/lib/sarvam-agent";
+import { detectEnglishCorrection, generateEnglishTutorReply } from "@/lib/english-tutor";
 import { site } from "@/lib/site";
 import { resources } from "@/lib/resources";
 import {
@@ -433,5 +434,31 @@ describe("Platform helpers", () => {
       expect(photo.is_published).toBe(true);
       expect(photo.image_url.length).toBeGreaterThan(0);
     }
+  });
+
+  it("provides friendly English speaking tutor replies with gentle grammar corrections and conversational chatbot small talk", () => {
+    const intro = generateEnglishTutorReply("Myself Rohan and I live in Derabassi", []);
+    expect(intro.correction?.original).toBe("Myself Rohan");
+    expect(intro.correction?.better).toBe("My name is Rohan");
+    expect(intro.reply.length).toBeGreaterThan(15);
+
+    const pastTense = detectEnglishCorrection("I am going to school yesterday");
+    expect(pastTense?.better).toBe("I went to school yesterday");
+
+    const didntCheck = detectEnglishCorrection("I didn't went to the market");
+    expect(didntCheck?.better).toBe("didn't go");
+
+    const cleanTopic = generateEnglishTutorReply(
+      "I watched a cricket match with my friends today",
+      [],
+    );
+    expect(cleanTopic.correction).toBeUndefined();
+    expect(cleanTopic.reply.toLowerCase()).toMatch(/favorite|watched|played|enjoy|\?/);
+
+    const chatState = createInitialChatSession("en");
+    const smallTalk = generateRabataAgentReply("How are you?", chatState, "en");
+    expect(smallTalk.nextState.stage).toBe("idle");
+    expect(smallTalk.reply.toLowerCase()).toContain("doing really well");
+    expect(smallTalk.suggestions?.length).toBeGreaterThan(0);
   });
 });

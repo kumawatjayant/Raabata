@@ -959,12 +959,43 @@ function localizedReply(lang: AppLanguage, en: string, hi: string, pa: string): 
 }
 
 function answerKnowledgeQuestion(lower: string, lang: AppLanguage): string | null {
+  if (/(how are you|how r u|how's it going|what's up|kaise ho|kya haal|ਕਿਵੇਂ ਹੋ)/i.test(lower)) {
+    return localizedReply(
+      lang,
+      "I'm doing really well, thanks for asking! Always happy to help families and volunteers connect with Rabata. What's on your mind today?",
+      "मैं बिल्कुल ठीक हूँ, पूछने के लिए शुक्रिया! राबता के साथ आपकी मदद करके हमेशा अच्छा लगता है। बताइए, आज किस बारे में जानना चाहते हैं?",
+      "ਮੈਂ ਬਿਲਕੁਲ ਠੀਕ ਹਾਂ, ਪੁੱਛਣ ਲਈ ਧੰਨਵਾਦ! ਦੱਸੋ ਅੱਜ ਮੈਂ ਤੁਹਾਡੀ ਕੀ ਮਦਦ ਕਰ ਸਕਦਾ ਹਾਂ?",
+    );
+  }
+
+  if (/(who are you|your name|what are you|robot|bot|real person|tum kaun)/i.test(lower)) {
+    return localizedReply(
+      lang,
+      `I'm Rabata's friendly assistant here to help you just like talking to our team! I can answer questions about our free classes, walk you through student registration, or connect you with Tammana at ${site.phoneDisplay}.`,
+      `मैं राबता का सहायक मित्र हूँ! मैं आपको हमारी निःशुल्क कक्षाओं की जानकारी दे सकता हूँ, छात्र पंजीकरण में मदद कर सकता हूँ या ${site.phoneDisplay} पर तमन्ना जी से जुड़ने का रास्ता बता सकता हूँ।`,
+      `ਮੈਂ ਰਾਬਤਾ ਦਾ ਸਹਾਇਕ ਮਿੱਤਰ ਹਾਂ! ਮੈਂ ਮੁਫ਼ਤ ਜਮਾਤਾਂ, ਵਿਦਿਆਰਥੀ ਰਜਿਸਟ੍ਰੇਸ਼ਨ ਜਾਂ ${site.phoneDisplay} ਤੇ ਤਮੰਨਾ ਜੀ ਨਾਲ ਗੱਲ ਕਰਨ ਵਿੱਚ ਤੁਹਾਡੀ ਮਦਦ ਕਰ ਸਕਦਾ ਹਾਂ।`,
+    );
+  }
+
+  if (
+    /(practice english|speak english|english tutor|speaking practice|spoken english practice)/i.test(
+      lower,
+    )
+  ) {
+    return localizedReply(
+      lang,
+      "Want to practice speaking English? Head over to our Learn with Rabata page (/learn) — we have a friendly English Speaking Partner right at the top where you can chat on any topic and get gentle tips!",
+      "अंग्रेज़ी बोलने का अभ्यास करना चाहते हैं? हमारे Learn with Rabata पेज (/learn) के सबसे ऊपर एक दोस्ताना English Speaking Partner है जहाँ आप किसी भी विषय पर बात करके अभ्यास कर सकते हैं!",
+      "ਜੇ ਤੁਸੀਂ ਅੰਗਰੇਜ਼ੀ ਬੋਲਣ ਦਾ ਅਭਿਆਸ ਕਰਨਾ ਚਾਹੁੰਦੇ ਹੋ, ਤਾਂ /learn ਪੇਜ ਦੇ ਉੱਪਰ ਸਾਡਾ ਦੋਸਤਾਨਾ English Speaking Partner ਵਰਤੋ!",
+    );
+  }
+
   if (/(fee|cost|charge|free|paisa|pay|kitne|मुफ़्त|निःशुल्क|फीस|ਮੁਫ਼ਤ|ਫੀਸ)/.test(lower)) {
     return localizedReply(
       lang,
-      "All Rabata education, mentorship, spoken English, computer classes, recorded lectures, and community meals are 100% free of cost. No family is ever charged.",
-      "राबता की सभी कक्षाएं, अंग्रेज़ी व कंप्यूटर शिक्षा, रिकॉर्डेड लेक्चर और सामुदायिक भोजन 100% निःशुल्क हैं।",
-      "ਰਾਬਤਾ ਦੀਆਂ ਸਾਰੀਆਂ ਜਮਾਤਾਂ, ਅੰਗਰੇਜ਼ੀ ਤੇ ਕੰਪਿਊਟਰ ਸਿਖਲਾਈ ਅਤੇ ਭੋਜਨ ਸੇਵਾ 100% ਮੁਫ਼ਤ ਹੈ।",
+      "Everything at Rabata is 100% free — classes, spoken English, computer basics, recorded lectures, and community meals. No family is ever asked to pay a rupee!",
+      "राबता में सब कुछ 100% निःशुल्क है — कक्षाएं, स्पोकन अंग्रेज़ी, कंप्यूटर, रिकॉर्डेड लेक्चर और सामुदायिक भोजन। किसी परिवार से कोई शुल्क नहीं लिया जाता।",
+      "ਰਾਬਤਾ ਵਿੱਚ ਹਰ ਚੀਜ਼ 100% ਮੁਫ਼ਤ ਹੈ — ਜਮਾਤਾਂ, ਅੰਗਰੇਜ਼ੀ, ਕੰਪਿਊਟਰ ਅਤੇ ਭੋਜਨ ਸੇਵਾ। ਕਿਸੇ ਤੋਂ ਕੋਈ ਫੀਸ ਨਹੀਂ ਲਈ ਜਾਂਦੀ।",
     );
   }
 
@@ -1252,6 +1283,7 @@ export function generateRabataAgentReply(
   reply: string;
   nextState: ChatSessionState;
   completedEnquiry?: SarvamOutputVariables;
+  suggestions?: string[];
 } {
   const trimmed = userInput.trim();
   const lower = trimmed.toLowerCase();
@@ -1284,16 +1316,19 @@ export function generateRabataAgentReply(
   // 2. Escape hatch: Allow user to cancel/reset a flow anytime
   if (
     state.stage !== "idle" &&
-    /^(cancel|stop|exit|quit|back|reset|never mind|nahi|no thanks|बंद|नहीं)$/i.test(trimmed)
+    /^(cancel|cancel draft|stop|exit|quit|back|reset|never mind|nahi|no thanks|बंद|नहीं)$/i.test(
+      trimmed,
+    )
   ) {
     return {
       reply: localizedReply(
         lang,
-        `No problem! I've cleared that draft. Feel free to ask any question about Rabata or call ${site.phoneDisplay}.`,
+        `No problem at all! I cleared that draft. Feel free to chat with me, ask about classes, or call ${site.phoneDisplay}.`,
         `कोई बात नहीं! मैंने वह प्रक्रिया रोक दी है। आप कोई भी सवाल पूछ सकते हैं या ${site.phoneDisplay} पर कॉल कर सकते हैं।`,
         `ਕੋਈ ਗੱਲ ਨਹੀਂ! ਤੁਸੀਂ ਰਾਬਤਾ ਬਾਰੇ ਕੋਈ ਵੀ ਸਵਾਲ ਪੁੱਛ ਸਕਦੇ ਹੋ ਜਾਂ ${site.phoneDisplay} ਤੇ ਕਾਲ ਕਰ ਸਕਦੇ ਹੋ।`,
       ),
       nextState: createInitialChatSession(lang),
+      suggestions: ["Classes & fees?", "Practice English", "Register a student"],
     };
   }
 
@@ -1312,9 +1347,14 @@ export function generateRabataAgentReply(
       return {
         reply: `${directAnswer}\n\n${nextStep.prompt}`,
         nextState: state,
+        suggestions: ["Cancel draft"],
       };
     }
-    return { reply: directAnswer, nextState: state };
+    return {
+      reply: directAnswer,
+      nextState: state,
+      suggestions: ["Practice English", "Where are you located?", "Register a student"],
+    };
   }
 
   // 4. Consent confirmation step
@@ -1335,12 +1375,13 @@ export function generateRabataAgentReply(
       return {
         reply: localizedReply(
           lang,
-          `Thank you! Registration for ${state.name} has been securely logged for Tammana Rathore to review (all classes remain 100% free; confirmation follows at ${state.email}). You can also call ${site.phoneDisplay} anytime.`,
+          `Wonderful! I've saved ${state.name}'s details for Tammana Rathore to review (classes are always 100% free, and we'll follow up on ${state.email}). You can also reach us anytime at ${site.phoneDisplay}!`,
           `धन्यवाद! ${state.name} का पंजीकरण सुरक्षित रूप से दर्ज हो गया है। तमन्ना जल्द ही ${state.email} पर संपर्क करेंगी।`,
           `ਧੰਨਵਾਦ! ${state.name} ਦੀ ਰਜਿਸਟ੍ਰੇਸ਼ਨ ਦਰਜ ਹੋ ਗਈ ਹੈ। ਤਮੰਨਾ ਜਲਦੀ ${state.email} ਤੇ ਸੰਪਰਕ ਕਰਨਗੇ।`,
         ),
         nextState: createInitialChatSession(lang),
         completedEnquiry: vars,
+        suggestions: ["Practice English", "Explore fund ledger"],
       };
     }
   }
@@ -1362,12 +1403,13 @@ export function generateRabataAgentReply(
       return {
         reply: localizedReply(
           lang,
-          `Thank you, ${state.name}! Your volunteer application has been logged for Tammana's review at ${site.email}.`,
+          `Thank you so much, ${state.name}! We appreciate you stepping up to mentor — Tammana will review your note at ${site.email} and get in touch soon.`,
           `धन्यवाद, ${state.name}! आपका स्वयंसेवक आवेदन सहेज लिया गया है।`,
           `ਧੰਨਵਾਦ, ${state.name}! ਤੁਹਾਡੀ ਵਲੰਟੀਅਰ ਅਰਜ਼ੀ ਦਰਜ ਹੋ ਗਈ ਹੈ।`,
         ),
         nextState: createInitialChatSession(lang),
         completedEnquiry: vars,
+        suggestions: ["Classes & fees?", "Where are you located?"],
       };
     }
   }
@@ -1390,33 +1432,50 @@ export function generateRabataAgentReply(
     if (wantsVolunteer) {
       const merged: ChatSessionState = { ...state, ...entities, kind: "volunteer" };
       const next = getNextMissingPrompt(merged, lang);
-      return { reply: next.prompt, nextState: { ...merged, stage: next.stage } };
+      return {
+        reply: next.prompt,
+        nextState: { ...merged, stage: next.stage },
+        suggestions: ["Cancel draft"],
+      };
     }
 
     if (wantsContact && !wantsStudent) {
       const merged: ChatSessionState = { ...state, ...entities, kind: "contact" };
       const next = getNextMissingPrompt(merged, lang);
-      return { reply: next.prompt, nextState: { ...merged, stage: next.stage } };
+      return {
+        reply: next.prompt,
+        nextState: { ...merged, stage: next.stage },
+        suggestions: ["Cancel draft"],
+      };
     }
 
     if (wantsStudent) {
       const merged: ChatSessionState = { ...state, ...entities, kind: "student" };
       const next = getNextMissingPrompt(merged, lang);
-      return { reply: next.prompt, nextState: { ...merged, stage: next.stage } };
+      return {
+        reply: next.prompt,
+        nextState: { ...merged, stage: next.stage },
+        suggestions: ["Cancel draft"],
+      };
     }
 
     if (directAnswer) {
-      return { reply: directAnswer, nextState: state };
+      return {
+        reply: directAnswer,
+        nextState: state,
+        suggestions: ["Classes & fees?", "Practice English", "Register a student"],
+      };
     }
 
     return {
       reply: localizedReply(
         lang,
-        `I can answer questions about Rabata's free programs, recorded lectures (/learn), and open fund ledger (/funds) — or help you register a student, volunteer as a mentor, or send a message. You can also call us at ${site.phoneDisplay}. What would you like to do?`,
-        `मैं राबता की निःशुल्क कक्षाओं, रिकॉर्डेड लेक्चर (/learn) और फंड पारदर्शिता (/funds) से जुड़े सवालों के जवाब दे सकता हूँ — या छात्र पंजीकरण व स्वयंसेवा में मदद कर सकता हूँ। हेल्पलाइन: ${site.phoneDisplay}`,
-        `ਮੈਂ ਰਾਬਤਾ ਦੀਆਂ ਮੁਫ਼ਤ ਜਮਾਤਾਂ, ਲੈਕਚਰ (/learn) ਅਤੇ ਫੰਡ ਪਾਰਦਰਸ਼ਤਾ (/funds) ਬਾਰੇ ਸਵਾਲਾਂ ਦੇ ਜਵਾਬ ਦੇ ਸਕਦਾ ਹਾਂ ਜਾਂ ਰਜਿਸਟ੍ਰੇਸ਼ਨ ਵਿੱਚ ਮਦਦ ਕਰ ਸਕਦਾ ਹਾਂ। ਹੈਲਪਲਾਈਨ: ${site.phoneDisplay}`,
+        `I'm right here! Tell me what you're looking for — we can talk about Rabata's free classes and learning library, practice English, get a student registered, or help you volunteer.`,
+        `मैं यहाँ आपकी मदद के लिए हूँ! बताइए, आप राबता की निःशुल्क कक्षाओं, अंग्रेज़ी अभ्यास, छात्र पंजीकरण या स्वयंसेवा में से किस बारे में बात करना चाहेंगे?`,
+        `ਮੈਂ ਤੁਹਾਡੀ ਮਦਦ ਲਈ ਇੱਥੇ ਹਾਂ! ਦੱਸੋ ਤੁਸੀਂ ਮੁਫ਼ਤ ਜਮਾਤਾਂ, ਅੰਗਰੇਜ਼ੀ ਅਭਿਆਸ, ਵਿਦਿਆਰਥੀ ਰਜਿਸਟ੍ਰੇਸ਼ਨ ਜਾਂ ਵਲੰਟੀਅਰ ਬਾਰੇ ਕੀ ਜਾਣਨਾ ਚਾਹੁੰਦੇ ਹੋ?`,
       ),
       nextState: state,
+      suggestions: ["Classes & fees?", "Practice English", "Register a student"],
     };
   }
 

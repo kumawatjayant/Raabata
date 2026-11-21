@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Download,
   HelpCircle,
+  MessageCircle,
   Play,
   RotateCcw,
   Search,
@@ -15,6 +16,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { EnglishSpeakingTutor } from "@/components/english-speaking-tutor";
 import { PageHeading } from "@/components/site-shell";
 import { pageHead } from "@/lib/site";
 import { resources, type LearningResource } from "@/lib/resources";
@@ -109,10 +111,28 @@ function Learn() {
       <PageHeading
         eyebrow="A world of learning. Free for everyone."
         title="Learn with Rabata"
-        description="Watch recorded lessons from Rabata mentors organized by subject and topic, or explore curated resources from trusted educational publishers."
+        description="Practice speaking English with a friendly partner, watch recorded mentor lessons, and explore curated resources from trusted publishers."
       />
 
       <section className="section">
+        <div className="container">
+          <div className="section-head">
+            <div>
+              <div className="eyebrow">
+                <MessageCircle size={13} /> Spoken English practice
+              </div>
+              <h2>Practice speaking English</h2>
+              <p className="section-copy">
+                Talk freely on any topic like chatting with a friend — get natural replies back and
+                gentle corrections whenever phrasing can be smoother.
+              </p>
+            </div>
+          </div>
+          <EnglishSpeakingTutor />
+        </div>
+      </section>
+
+      <section className="section section-soft">
         <div className="container">
           <div className="section-head">
             <div>
@@ -364,7 +384,7 @@ function Learn() {
         </div>
       </section>
 
-      <section className="section section-soft">
+      <section className="section">
         <div className="container">
           <div className="section-head">
             <div>

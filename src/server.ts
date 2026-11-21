@@ -2,6 +2,7 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import { ENGLISH_TUTOR_SYSTEM_PROMPT } from "./lib/english-tutor";
 import {
   normalizeSarvamWebhookObject,
   RABATA_SARVAM_SYSTEM_PROMPT,
@@ -276,6 +277,91 @@ async function handleApiRoute(request: Request): Promise<Response | null> {
     });
   }
 
+  if (path === "/api/english-tutor/config" && request.method === "GET") {
+    const tutorAppId = await getServerEnv("SARVAM_TUTOR_APP_ID");
+    return jsonResponse({
+      ok: true,
+      tutorAgentConfigured: Boolean(tutorAppId),
+      tutorAppId: tutorAppId || null,
+    });
+  }
+
+  if (path === "/api/english-tutor" && request.method === "POST") {
+    const rawKey =
+      (await getServerEnv("SARVAM_CHAT_API_KEY")) || (await getServerEnv("SARVAM_API_KEY"));
+    if (!rawKey || rawKey.startsWith("sk_sam")) {
+      return jsonResponse({ ok: false, mode: "local_fallback" }, 200);
+    }
+    try {
+      const body = (await request.json()) as {
+        messages?: Array<{ role: "user" | "assistant"; content: string }>;
+      };
+      const chatMessages = [
+        { role: "system", content: ENGLISH_TUTOR_SYSTEM_PROMPT },
+        ...(body.messages ?? []).slice(-12),
+      ];
+      const chatModel = (await getServerEnv("SARVAM_CHAT_MODEL")) || "sarvam-105b";
+      const res = await fetch("https://api.sarvam.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "api-subscription-key": rawKey,
+        },
+        body: JSON.stringify({
+          model: chatModel,
+          messages: chatMessages,
+          temperature: 0.65,
+          max_tokens: 320,
+        }),
+      });
+      if (!res.ok) {
+        return jsonResponse({ ok: false, mode: "local_fallback" }, 200);
+      }
+      const json = (await res.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
+      const rawContent = json.choices?.[0]?.message?.content?.trim();
+      if (!rawContent) {
+        return jsonResponse({ ok: false, mode: "local_fallback" }, 200);
+      }
+      try {
+        const stripped = rawContent
+          .replace(/^```json\s*/i, "")
+          .replace(/^```\s*/i, "")
+          .replace(/\s*```$/i, "")
+          .trim();
+        const parsed = JSON.parse(stripped) as {
+          reply?: unknown;
+          correction?: { original?: unknown; better?: unknown; tip?: unknown } | null;
+        };
+        const replyText = typeof parsed.reply === "string" ? parsed.reply.trim() : rawContent;
+        const corr = parsed.correction;
+        const validCorrection =
+          corr &&
+          typeof corr.original === "string" &&
+          typeof corr.better === "string" &&
+          corr.original.trim() &&
+          corr.better.trim()
+            ? {
+                original: corr.original.trim(),
+                better: corr.better.trim(),
+                tip: typeof corr.tip === "string" ? corr.tip.trim() : "",
+              }
+            : undefined;
+        return jsonResponse({
+          ok: true,
+          mode: "sarvam_api",
+          reply: replyText,
+          ...(validCorrection ? { correction: validCorrection } : {}),
+        });
+      } catch {
+        return jsonResponse({ ok: true, mode: "sarvam_api", reply: rawContent });
+      }
+    } catch {
+      return jsonResponse({ ok: false, mode: "local_fallback" }, 200);
+    }
+  }
+
   if (path === "/api/sarvam-chat" && request.method === "POST") {
     const rawKey =
       (await getServerEnv("SARVAM_CHAT_API_KEY")) || (await getServerEnv("SARVAM_API_KEY"));
@@ -287,7 +373,10 @@ async function handleApiRoute(request: Request): Promise<Response | null> {
         messages?: Array<{ role: "user" | "assistant"; content: string }>;
       };
       const chatMessages = [
-        { role: "system", content: RABATA_SARVAM_SYSTEM_PROMPT },
+        {
+          role: "system",
+          content: `${RABATA_SARVAM_SYSTEM_PROMPT}\n\nSpeak naturally like a warm, helpful human team member in 1-3 friendly sentences.`,
+        },
         ...(body.messages ?? []).slice(-10),
       ];
       const chatModel = (await getServerEnv("SARVAM_CHAT_MODEL")) || "sarvam-105b";
@@ -300,7 +389,7 @@ async function handleApiRoute(request: Request): Promise<Response | null> {
         body: JSON.stringify({
           model: chatModel,
           messages: chatMessages,
-          temperature: 0.4,
+          temperature: 0.55,
           max_tokens: 350,
         }),
       });
