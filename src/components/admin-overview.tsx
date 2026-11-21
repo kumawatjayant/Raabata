@@ -25,6 +25,7 @@ import type { RoleRow } from "@/lib/access";
 import type { AdminEnquiryItem } from "@/lib/enquiries.functions";
 import {
   calculateFundSummary,
+  formatClassLabel,
   formatINR,
   uploadPlatformFile,
   type FundAllocationRow,
@@ -96,7 +97,7 @@ export function AdminExecutiveOverview({
           </div>
           <div className="stat-value">{activeMentors}</div>
           <small className="stat-note">
-            {pendingRequests} pending role {pendingRequests === 1 ? "request" : "requests"} ·{" "}
+            {pendingRequests} pending {pendingRequests === 1 ? "request" : "requests"} ·{" "}
             {enquiries.length} enquiries
           </small>
         </article>
@@ -148,28 +149,30 @@ export function AdminExecutiveOverview({
               <tbody>
                 {academicProfiles.slice(0, 6).map((st) => (
                   <tr key={st.studentId}>
-                    <td>
+                    <td className="whitespace-nowrap">
                       <span className="pill-badge pill-green">{st.studentCode}</span>
                     </td>
                     <td>
                       <strong>{st.fullName}</strong>
                     </td>
-                    <td>{st.classGrade}</td>
-                    <td>
+                    <td className="whitespace-nowrap text-xs text-muted-foreground">
+                      {formatClassLabel(st.classGrade)}
+                    </td>
+                    <td className="whitespace-nowrap">
                       <strong>{st.overallPercentage}%</strong>
                     </td>
-                    <td>{st.attendancePercentage}%</td>
-                    <td>
+                    <td className="whitespace-nowrap">{st.attendancePercentage}%</td>
+                    <td className="whitespace-nowrap">
                       <span className="pill-badge">{st.progressTier}</span>
                     </td>
-                    <td style={{ textAlign: "right" }}>
-                      <Button
-                        size="sm"
-                        variant="outline"
+                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                      <button
+                        type="button"
+                        className="admin-action-btn admin-action-btn-secondary"
                         onClick={() => onOpenStudent(st.studentId)}
                       >
                         Open <ArrowRight size={13} />
-                      </Button>
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -179,9 +182,9 @@ export function AdminExecutiveOverview({
         )}
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="form-panel">
-          <div className="section-head mb-4">
+      <div className="grid gap-6 lg:grid-cols-2 items-stretch">
+        <section className="admin-panel-card">
+          <div className="admin-panel-card-head">
             <div>
               <div className="eyebrow">Transparency ledger</div>
               <h2>Fund allocation breakdown</h2>
@@ -190,12 +193,12 @@ export function AdminExecutiveOverview({
               Manage funds <ArrowRight size={14} />
             </button>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-3.5 mt-auto">
             {fundSummary.categoryBreakdown.map((cat) => (
-              <div key={cat.category} className="space-y-1">
-                <div className="flex justify-between text-xs">
-                  <span className="font-medium">{cat.category}</span>
-                  <span>
+              <div key={cat.category} className="space-y-1.5">
+                <div className="flex justify-between gap-3 text-xs">
+                  <span className="font-medium truncate">{cat.category}</span>
+                  <span className="whitespace-nowrap">
                     <strong>{formatINR(cat.spentInr)}</strong> spent ·{" "}
                     <span className="text-muted-foreground">
                       {formatINR(cat.plannedInr)} planned
@@ -210,52 +213,50 @@ export function AdminExecutiveOverview({
           </div>
         </section>
 
-        <section className="form-panel">
-          <div className="eyebrow">Quick actions</div>
-          <h2>Common administrative workflows</h2>
-          <div className="grid gap-2.5 sm:grid-cols-2 mt-4">
-            <Button
-              variant="outline"
-              className="justify-start"
+        <section className="admin-panel-card">
+          <div className="admin-panel-card-head">
+            <div>
+              <div className="eyebrow">Quick actions</div>
+              <h2>Common administrative workflows</h2>
+            </div>
+          </div>
+          <div className="grid gap-2.5 sm:grid-cols-2">
+            <button
+              type="button"
+              className="admin-quick-btn"
               onClick={() => onNavigate("academics")}
             >
               <UserPlus size={15} /> Register / Track Student
-            </Button>
-            <Button variant="outline" className="justify-start" onClick={() => onNavigate("funds")}>
+            </button>
+            <button type="button" className="admin-quick-btn" onClick={() => onNavigate("funds")}>
               <FileText size={15} /> Upload Bill / Fund Proof
-            </Button>
-            <Button
-              variant="outline"
-              className="justify-start"
+            </button>
+            <button
+              type="button"
+              className="admin-quick-btn"
               onClick={() => onNavigate("lectures")}
             >
               <Video size={15} /> Publish Recorded Lecture
-            </Button>
-            <Button
-              variant="outline"
-              className="justify-start"
-              onClick={() => onNavigate("stories")}
-            >
+            </button>
+            <button type="button" className="admin-quick-btn" onClick={() => onNavigate("stories")}>
               <Award size={15} /> Publish Story / Photo
-            </Button>
-            <Button
-              variant="outline"
-              className="justify-start"
+            </button>
+            <button
+              type="button"
+              className="admin-quick-btn"
               onClick={() => onNavigate("database")}
             >
               <Users size={15} /> Assign Mentor to Student
-            </Button>
-            <Button
-              variant="outline"
-              className="justify-start"
-              onClick={() => onNavigate("access")}
-            >
+            </button>
+            <button type="button" className="admin-quick-btn" onClick={() => onNavigate("access")}>
               <CheckCircle2 size={15} /> Recent Calls &amp; Enquiries
-            </Button>
+            </button>
           </div>
           {auditLogs.length > 0 && (
-            <div className="mt-5 pt-4 border-t">
-              <div className="text-xs font-semibold mb-2 text-primary">Latest Financial Audit</div>
+            <div className="mt-auto pt-4 border-t">
+              <div className="text-xs font-semibold mb-1.5 text-primary">
+                Latest Financial Audit
+              </div>
               <div className="text-xs text-muted-foreground">
                 {new Date(auditLogs[0]!.created_at).toLocaleDateString("en-IN")} ·{" "}
                 <strong>{auditLogs[0]!.action}</strong> · {auditLogs[0]!.summary}
@@ -367,13 +368,16 @@ export function AdminEmbeddedAcademicsPanel({
         <div>
           <h2>Student Academic Profiles ({filtered.length})</h2>
           <p className="text-xs text-muted-foreground mt-1">
-            Click Manage Record on any student to edit marks, attendance, skills, or download PDF
-            reports.
+            Select Manage on any learner to edit marks, attendance, skills, or download PDF reports.
           </p>
         </div>
-        <Button onClick={() => setShowAddModal(true)}>
-          <Plus size={15} /> Register New Student
-        </Button>
+        <button
+          type="button"
+          className="admin-action-btn admin-action-btn-primary admin-toolbar-btn"
+          onClick={() => setShowAddModal(true)}
+        >
+          <Plus size={14} /> Register New Student
+        </button>
       </div>
 
       <div className="filters" style={{ gridTemplateColumns: "2fr 1fr" }}>
@@ -417,25 +421,31 @@ export function AdminEmbeddedAcademicsPanel({
             <tbody>
               {filtered.map((st) => (
                 <tr key={st.studentId}>
-                  <td>
+                  <td className="whitespace-nowrap">
                     <span className="pill-badge pill-green">{st.studentCode}</span>
                   </td>
                   <td>
                     <strong>{st.fullName}</strong>
                   </td>
-                  <td>{st.classGrade}</td>
+                  <td className="whitespace-nowrap text-xs text-muted-foreground">
+                    {formatClassLabel(st.classGrade)}
+                  </td>
                   <td className="text-xs text-muted-foreground">{st.schoolName}</td>
-                  <td>
+                  <td className="whitespace-nowrap">
                     <strong>{st.overallPercentage}%</strong>
                   </td>
-                  <td>{st.attendancePercentage}%</td>
-                  <td>
+                  <td className="whitespace-nowrap">{st.attendancePercentage}%</td>
+                  <td className="whitespace-nowrap">
                     <span className="pill-badge">{st.progressTier}</span>
                   </td>
-                  <td style={{ textAlign: "right" }}>
-                    <Button variant="outline" size="sm" onClick={() => setSelectedId(st.studentId)}>
-                      Manage Record <ArrowRight size={13} />
-                    </Button>
+                  <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                    <button
+                      type="button"
+                      className="admin-action-btn admin-action-btn-secondary"
+                      onClick={() => setSelectedId(st.studentId)}
+                    >
+                      Manage <ArrowRight size={13} />
+                    </button>
                   </td>
                 </tr>
               ))}

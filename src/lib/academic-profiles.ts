@@ -833,10 +833,38 @@ function writeLocalAcademicMap(map: Record<string, StoredAcademicRow>): void {
   window.localStorage.setItem(ACADEMIC_STORAGE_KEY, JSON.stringify(map));
 }
 
-function buildFallbackAcademicRow(student: StudentRecordRow, index: number): StoredAcademicRow {
+export function allocateNextStudentCode(usedCodes: Set<string>): string {
+  const year = new Date().getFullYear();
+  let nextNum = 1;
+  for (const code of usedCodes) {
+    const match = code.match(/RBT-\d{4}-(\d+)/i);
+    if (match?.[1]) {
+      const n = Number(match[1]);
+      if (Number.isFinite(n) && n >= nextNum) {
+        nextNum = n + 1;
+      }
+    }
+  }
+  while (usedCodes.has(`RBT-${year}-${String(nextNum).padStart(3, "0")}`)) {
+    nextNum += 1;
+  }
+  const allocated = `RBT-${year}-${String(nextNum).padStart(3, "0")}`;
+  usedCodes.add(allocated);
+  return allocated;
+}
+
+export function createCodeAllocator(existingCodes: Iterable<string>): () => string {
+  const used = new Set<string>(existingCodes);
+  return () => allocateNextStudentCode(used);
+}
+
+function buildFallbackAcademicRow(
+  student: StudentRecordRow,
+  studentCode: string,
+): StoredAcademicRow {
   return {
     student_id: student.id,
-    student_code: `RBT-2026-${String(index + 1).padStart(3, "0")}`,
+    student_code: studentCode,
     full_name: student.first_name,
     photo_url: null,
     age: null,
@@ -956,8 +984,10 @@ export async function fetchAccessibleStudentProfiles(
       visibleStudents = visibleStudents.filter((s) => s.student_user_id === viewerUserId);
     }
 
-    return visibleStudents.map((stu, idx) => {
-      const acad = acadMap[stu.id] ?? buildFallbackAcademicRow(stu, idx);
+    const allocateCode = createCodeAllocator(Object.values(acadMap).map((r) => r.student_code));
+
+    return visibleStudents.map((stu) => {
+      const acad = acadMap[stu.id] ?? buildFallbackAcademicRow(stu, allocateCode());
       const assignedMentors = db.mentor_student_assignments
         .filter((a) => a.student_id === stu.id && a.active)
         .map((a) => mentorNames.get(a.mentor_user_id) ?? "Rabata Mentor");
@@ -981,8 +1011,9 @@ export async function fetchAccessibleStudentProfiles(
   const assignments = assignmentsRes.data ?? [];
   const mentorMap = new Map((mentorsRes.data ?? []).map((m) => [m.user_id, m.full_name]));
   const acadById = new Map(acadRows.map((row) => [row.student_id, row]));
+  const allocateCode = createCodeAllocator(acadRows.map((r) => r.student_code));
 
-  return students.map((stu, idx) => {
+  return students.map((stu) => {
     const dbRow = acadById.get(stu.id);
     const acad: StoredAcademicRow = dbRow
       ? {
@@ -1012,7 +1043,7 @@ export async function fetchAccessibleStudentProfiles(
           learning_goals: (dbRow.learning_goals as unknown as LearningGoalItem[]) ?? [],
           academic_documents: (dbRow.academic_documents as unknown as AcademicDocumentItem[]) ?? [],
         }
-      : buildFallbackAcademicRow(stu, idx);
+      : buildFallbackAcademicRow(stu, allocateCode());
 
     const assignedMentors = assignments
       .filter((a) => a.student_id === stu.id)

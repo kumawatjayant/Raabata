@@ -20,6 +20,7 @@ import {
   SEEDED_SARVAM_CALLS,
   type SarvamCallRecord,
 } from "@/lib/sarvam-agent";
+import { formatClassLabel } from "@/lib/platform";
 import { site } from "@/lib/site";
 
 function formatLanguageLabel(code: SarvamCallRecord["detected_language"], raw?: string): string {
@@ -125,9 +126,7 @@ export function AdminSarvamCallTracker({
           <div className="stat-label">
             <Phone size={15} /> Helpline Number
           </div>
-          <div className="stat-value" style={{ fontSize: 22 }}>
-            {site.phoneDisplay}
-          </div>
+          <div className="stat-value is-compact">{site.phoneDisplay}</div>
           <small className="stat-note">Hindi, Punjabi &amp; English</small>
         </article>
         <article className="stat-card">
@@ -237,7 +236,7 @@ export function AdminSarvamCallTracker({
                   .filter(Boolean)
                   .join(" · ");
                 const summaryLine = [
-                  draft.class_level ? `Class ${draft.class_level}` : "",
+                  draft.class_level ? formatClassLabel(draft.class_level) : "",
                   draft.subjects_needed,
                 ]
                   .filter(Boolean)

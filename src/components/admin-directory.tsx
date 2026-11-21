@@ -10,6 +10,7 @@ import type { AdminEnquiryItem } from "@/lib/enquiries.functions";
 import { makeLocalId, shouldUseLocalMode, updateLocalDb } from "@/lib/local-store";
 import {
   CLASS_LEVELS,
+  formatClassLabel,
   type AssignmentRow,
   type MentorProfileRow,
   type ProgressLogRow,
@@ -320,7 +321,7 @@ export function AdminAccessAndEnquiriesPanel({
               </div>
               <select
                 aria-label="Filter enquiries by type"
-                className="border rounded px-3 py-2 text-xs bg-background"
+                className="admin-toolbar-select"
                 value={kindFilter}
                 onChange={(e) =>
                   setKindFilter(e.target.value as "all" | "student" | "volunteer" | "contact")
@@ -804,7 +805,7 @@ export function AdminDatabasePanel({
   return (
     <div className="space-y-6">
       <div className="admin-toolbar">
-        <div className="admin-tabs" style={{ borderBottom: 0, paddingBottom: 0, marginBottom: 0 }}>
+        <div className="admin-tabs">
           <button
             type="button"
             aria-selected={subTab === "students"}
@@ -839,13 +840,21 @@ export function AdminDatabasePanel({
           </button>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setModalKind("assign")}>
+        <div className="admin-toolbar-actions">
+          <button
+            type="button"
+            className="admin-action-btn admin-action-btn-secondary admin-toolbar-btn"
+            onClick={() => setModalKind("assign")}
+          >
             <Link2 size={14} /> Assign Mentor
-          </Button>
-          <Button onClick={() => setModalKind("student")}>
+          </button>
+          <button
+            type="button"
+            className="admin-action-btn admin-action-btn-primary admin-toolbar-btn"
+            onClick={() => setModalKind("student")}
+          >
             <Plus size={14} /> Add Student
-          </Button>
+          </button>
         </div>
       </div>
 
@@ -876,8 +885,10 @@ export function AdminDatabasePanel({
                     <td>
                       <strong>{s.first_name}</strong>
                     </td>
-                    <td>
-                      <span className="pill-badge pill-green">Class {s.class_level}</span>
+                    <td className="whitespace-nowrap">
+                      <span className="pill-badge pill-green">
+                        {formatClassLabel(s.class_level)}
+                      </span>
                     </td>
                     <td className="text-xs text-muted-foreground">{s.subjects_needed}</td>
                     <td className="text-xs text-muted-foreground">
@@ -891,13 +902,13 @@ export function AdminDatabasePanel({
                         .filter(Boolean)
                         .join(" · ") || "Guardian"}
                     </td>
-                    <td>
+                    <td className="whitespace-nowrap">
                       {s.attendance_count}/{s.total_sessions}
                     </td>
                     <td>
                       <select
                         aria-label={`Change status for ${s.first_name}`}
-                        className="border rounded px-2 py-1 text-xs bg-background"
+                        className="admin-table-select"
                         value={s.status}
                         onChange={(e) =>
                           updateStudentStatus(
@@ -911,10 +922,17 @@ export function AdminDatabasePanel({
                         <option value="completed">completed</option>
                       </select>
                     </td>
-                    <td style={{ textAlign: "right" }}>
-                      <Button size="sm" variant="ghost" onClick={() => deleteStudent(s.id)}>
-                        <Trash2 size={13} />
-                      </Button>
+                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                      <div className="admin-actions">
+                        <button
+                          type="button"
+                          className="admin-action-btn admin-action-btn-icon admin-action-btn-danger"
+                          aria-label={`Delete ${s.first_name}`}
+                          onClick={() => deleteStudent(s.id)}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -958,7 +976,7 @@ export function AdminDatabasePanel({
                       <td>{mp?.subjects || "—"}</td>
                       <td className="text-xs text-muted-foreground">{mp?.qualifications || "—"}</td>
                       <td className="text-xs text-muted-foreground">{mp?.availability || "—"}</td>
-                      <td>
+                      <td className="whitespace-nowrap">
                         <span className="pill-badge pill-green">Active Mentor</span>
                       </td>
                     </tr>
@@ -1002,10 +1020,16 @@ export function AdminDatabasePanel({
                       </td>
                       <td>{a.subjects || "All subjects"}</td>
                       <td className="text-xs text-muted-foreground">{a.schedule_notes || "—"}</td>
-                      <td style={{ textAlign: "right" }}>
-                        <Button size="sm" variant="ghost" onClick={() => removeAssignment(a.id)}>
-                          <Trash2 size={13} /> Unassign
-                        </Button>
+                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                        <div className="admin-actions">
+                          <button
+                            type="button"
+                            className="admin-action-btn admin-action-btn-danger"
+                            onClick={() => removeAssignment(a.id)}
+                          >
+                            <Trash2 size={13} /> Unassign
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

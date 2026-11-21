@@ -24,6 +24,15 @@ export const LECTURE_SUBJECTS = [
 
 export const CLASS_LEVELS = ["All", "1–3", "4–5", "6–8", "9–10", "11–12", "Young adult"] as const;
 
+export function formatClassLabel(level: string): string {
+  const trimmed = level.trim();
+  if (!trimmed) return "—";
+  if (/^(all|all classes|young adult|adult|college|class\s)/i.test(trimmed)) {
+    return trimmed === "All" ? "All classes" : trimmed;
+  }
+  return `Class ${trimmed}`;
+}
+
 export const STORY_FOCUS_AREAS = [
   "Academic growth",
   "Spoken English & Confidence",

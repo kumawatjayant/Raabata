@@ -14,8 +14,14 @@ import {
 } from "@/lib/sarvam-agent";
 import { site } from "@/lib/site";
 import { resources } from "@/lib/resources";
-import { calculateFundSummary, extractYouTubeId, getQuizForLecture } from "@/lib/platform";
 import {
+  calculateFundSummary,
+  extractYouTubeId,
+  formatClassLabel,
+  getQuizForLecture,
+} from "@/lib/platform";
+import {
+  allocateNextStudentCode,
   buildVerificationQrSvg,
   calculateAttendanceMetrics,
   calculateOverallAcademicProgress,
@@ -397,5 +403,20 @@ describe("Platform helpers", () => {
     expect(webDraft.guardian_email).toBe("jayantkumawat802@gmail.com");
     expect(webDraft.class_level).toBe("");
     expect(webDraft.subjects_needed).toBe("English");
+  });
+
+  it("formats class labels cleanly and allocates unique sequential student codes", () => {
+    expect(formatClassLabel("Young adult")).toBe("Young adult");
+    expect(formatClassLabel("Class 7")).toBe("Class 7");
+    expect(formatClassLabel("6–8")).toBe("Class 6–8");
+    expect(formatClassLabel("All")).toBe("All classes");
+
+    const year = new Date().getFullYear();
+    const used = new Set([`RBT-${year}-001`, `RBT-${year}-002`, `RBT-${year}-003`]);
+    const next1 = allocateNextStudentCode(used);
+    const next2 = allocateNextStudentCode(used);
+    expect(next1).toBe(`RBT-${year}-004`);
+    expect(next2).toBe(`RBT-${year}-005`);
+    expect(next1).not.toBe(next2);
   });
 });

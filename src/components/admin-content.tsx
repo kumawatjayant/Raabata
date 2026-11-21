@@ -3,6 +3,8 @@ import { useState, type FormEvent } from "react";
 import {
   Award,
   Camera,
+  CheckCircle2,
+  Clock,
   ExternalLink,
   IndianRupee,
   Plus,
@@ -19,6 +21,7 @@ import {
   calculateFundSummary,
   CLASS_LEVELS,
   extractYouTubeId,
+  formatClassLabel,
   formatINR,
   FUND_CATEGORIES,
   LECTURE_SUBJECTS,
@@ -175,9 +178,13 @@ export function AdminLecturesPanel({
             Publish, hide, or manage recorded lessons on Learn with Rabata.
           </p>
         </div>
-        <Button onClick={() => setShowAddModal(true)}>
-          <Plus size={15} /> Add Recorded Lecture
-        </Button>
+        <button
+          type="button"
+          className="admin-action-btn admin-action-btn-primary admin-toolbar-btn"
+          onClick={() => setShowAddModal(true)}
+        >
+          <Plus size={14} /> Add Recorded Lecture
+        </button>
       </div>
 
       <div className="filters" style={{ gridTemplateColumns: "2fr 1fr" }}>
@@ -225,26 +232,39 @@ export function AdminLecturesPanel({
                   <td>
                     <strong className="text-foreground">{l.title}</strong>
                   </td>
-                  <td>
+                  <td className="whitespace-nowrap">
                     <span className="pill-badge pill-green">{l.subject}</span>
                   </td>
                   <td className="text-xs text-muted-foreground">{l.topic}</td>
-                  <td>{l.class_level === "All" ? "All classes" : `Class ${l.class_level}`}</td>
-                  <td>{l.instructor_name}</td>
-                  <td>{l.duration || "—"}</td>
-                  <td>
+                  <td className="whitespace-nowrap text-xs text-muted-foreground">
+                    {formatClassLabel(l.class_level)}
+                  </td>
+                  <td className="whitespace-nowrap">{l.instructor_name}</td>
+                  <td className="whitespace-nowrap text-xs text-muted-foreground">
+                    {l.duration || "—"}
+                  </td>
+                  <td className="whitespace-nowrap">
                     <span className={`pill-badge ${l.is_published ? "pill-green" : ""}`}>
                       {l.is_published ? "Published" : "Hidden"}
                     </span>
                   </td>
                   <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                    <div className="inline-flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => togglePublish(l)}>
+                    <div className="admin-actions">
+                      <button
+                        type="button"
+                        className="admin-action-btn admin-action-btn-secondary"
+                        onClick={() => togglePublish(l)}
+                      >
                         {l.is_published ? "Hide" : "Publish"}
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => removeLecture(l.id)}>
+                      </button>
+                      <button
+                        type="button"
+                        className="admin-action-btn admin-action-btn-icon admin-action-btn-danger"
+                        aria-label={`Delete ${l.title}`}
+                        onClick={() => removeLecture(l.id)}
+                      >
                         <Trash2 size={14} />
-                      </Button>
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -586,26 +606,38 @@ export function AdminFundsPanel({
   return (
     <div className="space-y-6">
       <div className="stat-cards">
-        <div className="stat-card">
-          <div className="stat-label">Received</div>
+        <article className="stat-card">
+          <div className="stat-label">
+            <IndianRupee size={14} /> Received
+          </div>
           <div className="stat-value">{formatINR(summary.totalReceivedInr)}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Spent</div>
+          <small className="stat-note">{donations.length} logged contributions</small>
+        </article>
+        <article className="stat-card">
+          <div className="stat-label">
+            <Receipt size={14} /> Spent
+          </div>
           <div className="stat-value">{formatINR(summary.totalSpentInr)}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Available Balance</div>
+          <small className="stat-note">With public receipts &amp; proofs</small>
+        </article>
+        <article className="stat-card">
+          <div className="stat-label">
+            <CheckCircle2 size={14} /> Available Balance
+          </div>
           <div className="stat-value">{formatINR(summary.availableBalanceInr)}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Planned</div>
+          <small className="stat-note">Ready for upcoming student needs</small>
+        </article>
+        <article className="stat-card">
+          <div className="stat-label">
+            <Clock size={14} /> Planned
+          </div>
           <div className="stat-value">{formatINR(summary.totalPlannedInr)}</div>
-        </div>
+          <small className="stat-note">Upcoming earmarked allocations</small>
+        </article>
       </div>
 
       <div className="admin-toolbar">
-        <div className="admin-tabs" style={{ borderBottom: 0, paddingBottom: 0, marginBottom: 0 }}>
+        <div className="admin-tabs">
           <button
             type="button"
             aria-selected={subTab === "allocations"}
@@ -632,13 +664,21 @@ export function AdminFundsPanel({
           </button>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setModalKind("donation")}>
+        <div className="admin-toolbar-actions">
+          <button
+            type="button"
+            className="admin-action-btn admin-action-btn-secondary admin-toolbar-btn"
+            onClick={() => setModalKind("donation")}
+          >
             <IndianRupee size={14} /> Record Donation
-          </Button>
-          <Button onClick={() => setModalKind("allocation")}>
+          </button>
+          <button
+            type="button"
+            className="admin-action-btn admin-action-btn-primary admin-toolbar-btn"
+            onClick={() => setModalKind("allocation")}
+          >
             <Plus size={14} /> Add Expense / Proof
-          </Button>
+          </button>
         </div>
       </div>
 
@@ -677,20 +717,20 @@ export function AdminFundsPanel({
                         </div>
                       )}
                     </td>
-                    <td>
+                    <td className="whitespace-nowrap">
                       <span className="pill-badge">{a.category}</span>
                     </td>
-                    <td>
+                    <td className="whitespace-nowrap">
                       <span
                         className={`pill-badge ${a.entry_type === "expenditure" ? "pill-green" : "pill-gold"}`}
                       >
                         {a.entry_type === "expenditure" ? "Spent" : "Planned"}
                       </span>
                     </td>
-                    <td>
+                    <td className="whitespace-nowrap">
                       <strong>{formatINR(Number(a.amount_inr))}</strong>
                     </td>
-                    <td>
+                    <td className="whitespace-nowrap">
                       {a.proof_url ? (
                         <a
                           href={a.proof_url}
@@ -704,10 +744,17 @@ export function AdminFundsPanel({
                         <span className="text-xs text-muted-foreground">None</span>
                       )}
                     </td>
-                    <td style={{ textAlign: "right" }}>
-                      <Button size="sm" variant="ghost" onClick={() => deleteAllocation(a)}>
-                        <Trash2 size={14} />
-                      </Button>
+                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                      <div className="admin-actions">
+                        <button
+                          type="button"
+                          className="admin-action-btn admin-action-btn-icon admin-action-btn-danger"
+                          aria-label={`Delete ${a.title}`}
+                          onClick={() => deleteAllocation(a)}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -1180,7 +1227,7 @@ export function AdminStoriesAndPhotosPanel({
   return (
     <div className="space-y-6">
       <div className="admin-toolbar">
-        <div className="admin-tabs" style={{ borderBottom: 0, paddingBottom: 0, marginBottom: 0 }}>
+        <div className="admin-tabs">
           <button
             type="button"
             aria-selected={subTab === "stories"}
@@ -1199,13 +1246,21 @@ export function AdminStoriesAndPhotosPanel({
           </button>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setModalKind("photo")}>
+        <div className="admin-toolbar-actions">
+          <button
+            type="button"
+            className="admin-action-btn admin-action-btn-secondary admin-toolbar-btn"
+            onClick={() => setModalKind("photo")}
+          >
             <Camera size={14} /> Upload Gallery Photo
-          </Button>
-          <Button onClick={() => setModalKind("story")}>
+          </button>
+          <button
+            type="button"
+            className="admin-action-btn admin-action-btn-primary admin-toolbar-btn"
+            onClick={() => setModalKind("story")}
+          >
             <Plus size={14} /> Add Success Story
-          </Button>
+          </button>
         </div>
       </div>
 
@@ -1235,18 +1290,25 @@ export function AdminStoriesAndPhotosPanel({
                       <strong>{s.title}</strong>
                     </td>
                     <td>{s.is_anonymous ? "Anonymous Learner" : s.learner_display_name}</td>
-                    <td>
+                    <td className="whitespace-nowrap">
                       <span className="pill-badge">{s.focus_area}</span>
                     </td>
-                    <td>
+                    <td className="whitespace-nowrap">
                       <span className="pill-badge pill-green">
                         {s.is_anonymous ? "Anonymous" : "Consent Verified"}
                       </span>
                     </td>
-                    <td style={{ textAlign: "right" }}>
-                      <Button size="sm" variant="ghost" onClick={() => deleteStory(s.id)}>
-                        <Trash2 size={14} />
-                      </Button>
+                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                      <div className="admin-actions">
+                        <button
+                          type="button"
+                          className="admin-action-btn admin-action-btn-icon admin-action-btn-danger"
+                          aria-label={`Delete ${s.title}`}
+                          onClick={() => deleteStory(s.id)}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -1288,14 +1350,21 @@ export function AdminStoriesAndPhotosPanel({
                     <td>
                       <strong>{p.title}</strong>
                     </td>
-                    <td>
+                    <td className="whitespace-nowrap">
                       <span className="pill-badge">{p.category}</span>
                     </td>
                     <td className="text-xs text-muted-foreground">{p.caption}</td>
-                    <td style={{ textAlign: "right" }}>
-                      <Button size="sm" variant="ghost" onClick={() => deletePhoto(p.id)}>
-                        <Trash2 size={14} />
-                      </Button>
+                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                      <div className="admin-actions">
+                        <button
+                          type="button"
+                          className="admin-action-btn admin-action-btn-icon admin-action-btn-danger"
+                          aria-label={`Delete ${p.title}`}
+                          onClick={() => deletePhoto(p.id)}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

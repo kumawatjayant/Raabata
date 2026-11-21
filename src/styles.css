@@ -1154,26 +1154,33 @@ h2 {
   color: var(--foreground);
 }
 .admin-tabs {
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
-  gap: 8px;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 14px;
-  margin-bottom: 24px;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
 }
 .tab-btn {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 8px 14px;
-  border-radius: 999px;
+  gap: 6px;
+  height: 30px;
+  padding: 0 13px;
+  border-radius: 7px;
   font-size: 12px;
   font-weight: 600;
-  border: 1px solid var(--border);
-  background: var(--background);
+  border: 0;
+  background: transparent;
   color: var(--muted-foreground);
   cursor: pointer;
-  transition: all 0.15s ease;
+  white-space: nowrap;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 .tab-btn:hover {
   color: var(--foreground);
@@ -1182,7 +1189,7 @@ h2 {
 .tab-btn[aria-selected="true"] {
   background: var(--primary);
   color: var(--primary-foreground);
-  border-color: var(--primary);
+  box-shadow: 0 1px 2px oklch(0 0 0 / 0.14);
 }
 
 /* Student Profiles & Academic Tracking */
@@ -1329,7 +1336,7 @@ h2 {
 /* Enterprise Sidebar Console (Admin & Member Portal) */
 .console-shell {
   display: grid;
-  grid-template-columns: 272px 1fr;
+  grid-template-columns: 256px 1fr;
   min-height: 100vh;
   background: var(--muted);
 }
@@ -1338,7 +1345,7 @@ h2 {
   color: var(--primary-foreground);
   display: flex;
   flex-direction: column;
-  padding: 22px 16px;
+  padding: 18px 14px;
   border-right: 1px solid oklch(1 0 0 / 0.08);
   position: sticky;
   top: 0;
@@ -1346,9 +1353,9 @@ h2 {
   overflow-y: auto;
 }
 .console-brand-box {
-  padding: 10px 12px 18px;
+  padding: 4px 10px 14px;
   border-bottom: 1px solid oklch(1 0 0 / 0.1);
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 .console-brand-tag {
   display: inline-block;
@@ -1361,9 +1368,10 @@ h2 {
 }
 .console-brand-title {
   font-family: var(--font-display);
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--primary-foreground);
+  white-space: nowrap;
 }
 .console-nav-group {
   font-size: 10px;
@@ -1371,12 +1379,12 @@ h2 {
   text-transform: uppercase;
   letter-spacing: 1.4px;
   color: oklch(1 0 0 / 0.48);
-  padding: 10px 12px 6px;
+  padding: 8px 10px 4px;
 }
 .console-nav {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 .console-nav-item {
   display: flex;
@@ -1384,8 +1392,8 @@ h2 {
   justify-content: space-between;
   gap: 10px;
   width: 100%;
-  padding: 10px 12px;
-  border-radius: 9px;
+  padding: 8.5px 10px;
+  border-radius: 8px;
   font-size: 13px;
   font-weight: 500;
   color: oklch(1 0 0 / 0.78);
@@ -1420,6 +1428,7 @@ h2 {
   border-radius: 999px;
   background: oklch(1 0 0 / 0.14);
   color: #fff;
+  flex-shrink: 0;
 }
 .console-nav-item[aria-current="page"] .console-badge {
   background: oklch(0.18 0.06 254 / 0.16);
@@ -1427,18 +1436,18 @@ h2 {
 }
 .console-sidebar-footer {
   margin-top: auto;
-  padding-top: 16px;
+  padding-top: 12px;
   border-top: 1px solid oklch(1 0 0 / 0.1);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 3px;
   font-size: 12px;
 }
 .console-sidebar-link {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 7px 10px;
   border-radius: 8px;
   color: oklch(1 0 0 / 0.72);
   transition:
@@ -1462,19 +1471,25 @@ h2 {
 .console-topbar {
   background: var(--background);
   border-bottom: 1px solid var(--border);
-  padding: 16px 32px;
+  min-height: 76px;
+  padding: 14px 28px;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 20px;
   position: sticky;
   top: 0;
   z-index: 20;
 }
+.console-topbar-title {
+  min-width: 0;
+  flex: 1;
+}
 .console-topbar h1 {
   font-family: var(--font-display);
-  font-size: 24px;
+  font-size: 22px;
+  line-height: 1.2;
   font-weight: 600;
   color: var(--primary);
   max-width: none;
@@ -1483,11 +1498,84 @@ h2 {
   font-size: 12.5px;
   color: var(--muted-foreground);
   margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.console-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.console-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 11px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--leaf-soft);
+  color: var(--leaf);
+  border: 1px solid color-mix(in oklch, var(--leaf) 30%, var(--border));
+  white-space: nowrap;
+}
+.console-topbar-btn {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 8px;
 }
 .console-content {
-  padding: 28px 32px 56px;
-  max-width: 1280px;
+  padding: 24px 28px 48px;
+  max-width: 1360px;
   width: 100%;
+  margin-inline: auto;
+}
+.console-main .stat-cards {
+  gap: 16px;
+  align-items: stretch;
+}
+.console-main .stat-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 122px;
+  padding: 18px 20px;
+  border-radius: 12px;
+}
+.console-main .stat-value {
+  font-size: 28px;
+  line-height: 1.15;
+  margin-top: 8px;
+  white-space: nowrap;
+}
+.console-main .stat-value.is-compact {
+  font-size: 20px;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+}
+.console-main .filters {
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.console-main .filters input,
+.console-main .filters select {
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 9px;
+  font-size: 13px;
+}
+.console-main .search-field input {
+  padding-left: 36px;
+}
+.console-main .search-field svg {
+  top: 50%;
+  transform: translateY(-50%);
+  left: 12px;
 }
 .console-mobile-bar {
   display: none;
@@ -1547,12 +1635,15 @@ h2 {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px;
+  height: 34px;
+  padding: 0 11px;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--muted);
   color: var(--muted-foreground);
   font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
   cursor: pointer;
   transition:
     border-color 0.15s,
@@ -1846,12 +1937,19 @@ h2 {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  margin-bottom: 18px;
+  min-height: 40px;
+  margin-bottom: 16px;
 }
 .admin-toolbar h2 {
   font-size: 20px;
   font-weight: 600;
   color: var(--primary);
+}
+.admin-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
 .admin-table-wrap {
   border: 1px solid var(--border);
@@ -1950,11 +2048,111 @@ h2 {
 .admin-action-btn-success:hover:not(:disabled) {
   background: color-mix(in oklch, var(--leaf) 18%, var(--background));
 }
+.admin-action-btn-danger {
+  background: var(--background);
+  color: var(--muted-foreground);
+  border: 1px solid var(--border);
+}
+.admin-action-btn-danger:hover:not(:disabled) {
+  color: var(--destructive);
+  border-color: color-mix(in oklch, var(--destructive) 38%, var(--border));
+  background: color-mix(in oklch, var(--destructive) 8%, var(--background));
+}
+.admin-action-btn-icon {
+  width: 32px;
+  padding: 0;
+}
 .admin-toolbar-btn {
   height: 40px;
   padding: 0 14px;
   border-radius: 9px;
   font-size: 12.5px;
+}
+.admin-table-select {
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+}
+.admin-table-select:focus {
+  border-color: var(--leaf);
+}
+.admin-toolbar-select {
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 12.5px;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+}
+.admin-toolbar-select:focus {
+  border-color: var(--leaf);
+}
+.admin-panel-card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 22px 24px;
+  background: var(--background);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+}
+.admin-panel-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.admin-panel-card-head .eyebrow {
+  margin-bottom: 6px;
+}
+.admin-panel-card-head h2 {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--primary);
+  margin: 0;
+}
+.admin-quick-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  height: 40px;
+  padding: 0 13px;
+  border-radius: 9px;
+  font-size: 12.5px;
+  font-weight: 600;
+  background: var(--background);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    color 0.15s;
+}
+.admin-quick-btn svg {
+  color: var(--primary);
+  flex-shrink: 0;
+}
+.admin-quick-btn:hover {
+  border-color: color-mix(in oklch, var(--primary) 40%, var(--border));
+  background: var(--muted);
+  color: var(--primary);
 }
 .enroll-transcript-preview {
   background: var(--muted);
@@ -2017,6 +2215,12 @@ h2 {
   }
 }
 @media (max-width: 1120px) {
+  .console-topbar {
+    flex-wrap: wrap;
+  }
+  .console-topbar p {
+    white-space: normal;
+  }
   .desktop-nav {
     display: none;
   }

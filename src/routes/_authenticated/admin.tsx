@@ -66,35 +66,31 @@ export const Route = createFileRoute("/_authenticated/admin")({
 const SECTION_META: Record<AdminSectionId, { title: string; subtitle: string }> = {
   overview: {
     title: "Executive Overview",
-    subtitle:
-      "Organization-wide summary across students, mentors, lectures, and transparent funds.",
+    subtitle: "Summary across students, mentors, lectures, and funds.",
   },
   academics: {
-    title: "Student Academic Profiles",
-    subtitle:
-      "Manage individual marks, monthly progress graphs, attendance calendars, goals & PDF reports.",
+    title: "Academic Profiles",
+    subtitle: "Manage marks, attendance calendars, goals, and PDF reports.",
   },
   database: {
     title: "Mentors & Student Roster",
-    subtitle: "Manage mentor profiles, student assignments, and classroom attendance logs.",
+    subtitle: "Manage mentors, student roster, pairings, and attendance logs.",
   },
   access: {
     title: "Recent Calls & Enquiries",
-    subtitle:
-      "Listen & read recent helpline call transcripts (+91 79654 81661), handle website enquiries, and approve accounts.",
+    subtitle: "Review helpline transcripts (+91 79654 81661), enquiries, and approvals.",
   },
   lectures: {
     title: "Recorded Lectures Studio",
-    subtitle: "Upload or publish subject-wise and topic-wise educational video lessons.",
+    subtitle: "Publish subject-wise and topic-wise educational video lessons.",
   },
   funds: {
     title: "Fund Transparency & Proofs",
-    subtitle:
-      "Record donations, publish expenditures with bill/receipt proofs, and inspect the audit trail.",
+    subtitle: "Record donations, expenditures, bill proofs, and the audit trail.",
   },
   stories: {
     title: "Success Stories & Gallery",
-    subtitle: "Publish safeguarding-verified learner journeys and homepage teaching photography.",
+    subtitle: "Publish safeguarding-verified learner stories and teaching photos.",
   },
 };
 
@@ -455,7 +451,7 @@ function Admin() {
     {
       group: "Workspace",
       id: "academics",
-      label: "Student Academic Profiles",
+      label: "Academic Profiles",
       icon: GraduationCap,
       badge: d.academicProfiles.length,
     },
@@ -517,8 +513,8 @@ function Admin() {
         aria-label="Admin navigation"
       >
         <div className="console-brand-box">
-          <span className="console-brand-tag">Rabata Governance OS</span>
-          <div className="console-brand-title">Central Admin Console</div>
+          <span className="console-brand-tag">Rabata Admin</span>
+          <div className="console-brand-title">Admin Console</div>
         </div>
 
         {groups.map((grp) => (
@@ -569,11 +565,11 @@ function Admin() {
 
       <div className="console-main">
         <header className="console-topbar">
-          <div>
+          <div className="console-topbar-title">
             <h1>{activeMeta.title}</h1>
             <p>{activeMeta.subtitle}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="console-topbar-actions">
             <button
               type="button"
               className="cmdk-trigger"
@@ -583,20 +579,21 @@ function Admin() {
                 setCmdIndex(0);
               }}
             >
-              <Search size={13} /> Search &amp; Jump… <kbd>Ctrl K</kbd>
+              <Search size={13} /> Search… <kbd>Ctrl K</kbd>
             </button>
-            <span className="pill-badge pill-green">
-              <ShieldCheck size={12} />{" "}
-              {d.isLocal ? "Preview Mode · RLS Simulation" : "Admin Verified · RLS Active"}
+            <span className="console-status-chip">
+              <ShieldCheck size={13} />
+              {d.isLocal ? "Preview Mode" : "Admin Active"}
             </span>
-            <Button asChild size="sm" variant="outline">
-              <Link to="/students">Directory View</Link>
-            </Button>
-            <Button asChild size="sm" variant="ghost">
-              <Link to="/">
-                <ExternalLink size={13} /> Public Site
-              </Link>
-            </Button>
+            <Link
+              to="/students"
+              className="admin-action-btn admin-action-btn-secondary console-topbar-btn"
+            >
+              Directory
+            </Link>
+            <Link to="/" className="admin-action-btn admin-action-btn-secondary console-topbar-btn">
+              <ExternalLink size={13} /> Public Site
+            </Link>
           </div>
         </header>
 
