@@ -6,7 +6,9 @@ import { routeTree } from "@/routeTree.gen";
 import { TRANSLATIONS } from "@/lib/i18n";
 import {
   createInitialChatSession,
+  extractStudentDraftFromCall,
   generateRabataAgentReply,
+  normalizeClassLevel,
   parseSarvamWebhookPayload,
   RABATA_SARVAM_SYSTEM_PROMPT,
 } from "@/lib/sarvam-agent";
@@ -299,5 +301,101 @@ describe("Platform helpers", () => {
     );
     const cancelled = generateRabataAgentReply("cancel", started.nextState, "en");
     expect(cancelled.nextState.stage).toBe("idle");
+
+    // Greetings and emails must not pollute name or class slots in web chatbot
+    const greetTurn = generateRabataAgentReply("hi", started.nextState, "en");
+    expect(greetTurn.nextState.name).toBe("");
+    const nameEmailTurn = generateRabataAgentReply(
+      "jayant, jayantkumawat802@gmail.com",
+      greetTurn.nextState,
+      "en",
+    );
+    expect(nameEmailTurn.nextState.name).toBe("Jayant");
+    expect(nameEmailTurn.nextState.email).toBe("jayantkumawat802@gmail.com");
+    expect(nameEmailTurn.nextState.classLevel).toBe("");
+  });
+
+  it("extracts pre-filled student enrollment drafts cleanly from call & chat transcripts", () => {
+    expect(normalizeClassLevel("jayant, jayantkumawat802@gmail")).toBe("");
+    expect(normalizeClassLevel("Class 7")).toBe("6–8");
+    expect(normalizeClassLevel("Young adult")).toBe("Young adult");
+
+    const adultCall = parseSarvamWebhookPayload(
+      JSON.stringify({
+        interaction_id: "20261120/tamanna-call",
+        user_contact: "+919876046899",
+        agent_variables: {
+          kind: "student",
+          name: "Tamanna",
+          classLevel: "Young adult",
+          subjects: "Academic support, spoken English",
+          consent: false,
+        },
+        translate_transcript: [{ role: "user", text: "My name is Tamanna, I am 19 years old." }],
+      }),
+    );
+    const adultDraft = extractStudentDraftFromCall(adultCall);
+    expect(adultDraft.first_name).toBe("Tamanna");
+    expect(adultDraft.class_level).toBe("Young adult");
+    expect(adultDraft.guardian_phone).toBe("+919876046899");
+    expect(adultDraft.guardian_email).toBe("");
+    expect(adultDraft.guardian_consent).toBe(false);
+
+    const teenAgeCall = parseSarvamWebhookPayload(
+      JSON.stringify({
+        interaction_id: "20261120/teen-call",
+        user_contact: "+919876046899",
+        agent_variables: { kind: "student" },
+        translate_transcript: [
+          { role: "user", text: "I want to learn. I am 15 years old." },
+          { role: "agent", text: "We teach English, Science, Math and Computers." },
+        ],
+      }),
+    );
+    const teenDraft = extractStudentDraftFromCall(teenAgeCall);
+    expect(teenDraft.first_name).toBe("");
+    expect(teenDraft.class_level).toBe("9–10");
+    expect(teenDraft.guardian_phone).toBe("+919876046899");
+    expect(teenDraft.subjects_needed).toBe("");
+
+    const spokenDetailsCall = parseSarvamWebhookPayload(
+      JSON.stringify({
+        interaction_id: "20261120/rohan-call",
+        user_contact: "+919814000002",
+        agent_variables: { kind: "student" },
+        translate_transcript: [
+          {
+            role: "user",
+            text: "My name is Rohan, I am in class 7 and need help with Science and Math.",
+          },
+        ],
+      }),
+    );
+    const rohanDraft = extractStudentDraftFromCall(spokenDetailsCall);
+    expect(rohanDraft.first_name).toBe("Rohan");
+    expect(rohanDraft.class_level).toBe("6–8");
+    expect(rohanDraft.subjects_needed).toContain("Mathematics");
+    expect(rohanDraft.subjects_needed).toContain("Science");
+
+    const noisyWebChat = parseSarvamWebhookPayload(
+      JSON.stringify({
+        interaction_id: "20261121/noisy-chat",
+        channel: "rabata_web_chatbot",
+        user_phone_number: "jayantkumawat802@gmail.com",
+        output_agent_variables: {
+          kind: "student",
+          name: "hi",
+          email: "jayantkumawat802@gmail.com",
+          classLevel: "jayant, jayantkumawat802@gmail",
+          subjects: "englihs",
+        },
+      }),
+    );
+    const webDraft = extractStudentDraftFromCall(noisyWebChat);
+    expect(webDraft.first_name).toBe("");
+    expect(webDraft.guardian_phone).toBe("");
+    expect(webDraft.guardian_email).toBe("jayantkumawat802@gmail.com");
+    expect(webDraft.class_level).toBe("");
+    expect(webDraft.subjects_needed).toBe("English");
   });
 });

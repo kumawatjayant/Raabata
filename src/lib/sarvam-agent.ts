@@ -319,6 +319,339 @@ export function updateSarvamCallStatus(
   return next;
 }
 
+const ENROLLED_INTERACTIONS_STORAGE_KEY = "rabata_enrolled_interactions_v1";
+
+export function readEnrolledInteractionIds(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(ENROLLED_INTERACTIONS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+export function markInteractionEnrolled(interactionId: string): string[] {
+  const trimmed = interactionId.trim();
+  const current = readEnrolledInteractionIds();
+  if (!trimmed) return current;
+  if (current.includes(trimmed)) return current;
+  const next = [trimmed, ...current].slice(0, 200);
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem(ENROLLED_INTERACTIONS_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // ignore storage quota errors
+    }
+  }
+  return next;
+}
+
+export interface StudentEnrollmentDraft {
+  first_name: string;
+  guardian_name: string;
+  guardian_email: string;
+  guardian_phone: string;
+  class_level: string;
+  subjects_needed: string;
+  preferred_language: string;
+  preferred_format: string;
+  learning_goals: string;
+  guardian_consent: boolean;
+  prefilledFields: string[];
+}
+
+const PLACEHOLDER_NAME_RE =
+  /^(hi|hello|hey|namaste|sat sri akal|yes|yeah|yep|no|ok|okay|sure|haan|ha|thanks|thank you|caller(?:\s|$).*|unnamed.*|student|unknown|n\/a)$/i;
+
+const TRANSCRIPT_NAME_STOPWORDS = new Set([
+  "interested",
+  "looking",
+  "calling",
+  "using",
+  "speaking",
+  "asking",
+  "trying",
+  "here",
+  "fine",
+  "good",
+  "sure",
+  "ready",
+  "from",
+  "in",
+  "a",
+  "an",
+  "the",
+  "not",
+  "just",
+  "over",
+  "under",
+  "parent",
+  "guardian",
+  "student",
+  "years",
+  "year",
+  "old",
+  "happy",
+  "learning",
+  "studying",
+  "class",
+  "grade",
+]);
+
+function sanitizePersonName(raw?: string): string {
+  const s = (raw ?? "").trim();
+  if (!s || s.length < 2 || s.length > 60) return "";
+  if (s.includes("@") || /^\+?\d[\d\s-]*$/.test(s)) return "";
+  if (PLACEHOLDER_NAME_RE.test(s)) return "";
+  return s.slice(0, 100);
+}
+
+function sanitizeEmail(raw?: string): string {
+  const s = (raw ?? "").trim().toLowerCase();
+  if (!s || !/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(s)) return "";
+  if (s.endsWith(".local")) return "";
+  return s.slice(0, 255);
+}
+
+function sanitizePhone(raw?: string): string {
+  const s = (raw ?? "").trim();
+  if (!s || s.includes("@")) return "";
+  const digits = s.replace(/\D/g, "");
+  if (digits.length < 7 || digits.length > 15) return "";
+  return s.slice(0, 40);
+}
+
+function sanitizeSubjectsText(raw?: string): string {
+  const s = (raw ?? "").trim();
+  if (!s || s.includes("@")) return "";
+  return s
+    .replace(/\benglihs\b/gi, "English")
+    .replace(/\bmaths\b/gi, "Mathematics")
+    .trim()
+    .slice(0, 300);
+}
+
+export function normalizeClassLevel(raw?: string): string {
+  const s = (raw ?? "").trim();
+  if (!s || s.includes("@")) return "";
+  const canonical = ["1–3", "4–5", "6–8", "9–10", "11–12", "Young adult"];
+  if (canonical.includes(s)) return s;
+
+  const lower = s.toLowerCase();
+  if (/\b(young\s*adult|adult|college|university|graduate)\b/i.test(lower)) {
+    return "Young adult";
+  }
+
+  const dashed = lower.match(/\b(1[0-2]|[1-9])\s*[-–—to]+\s*(1[0-2]|[1-9])\b/i);
+  if (dashed?.[1]) {
+    const n = Number(dashed[1]);
+    if (n <= 3) return "1–3";
+    if (n <= 5) return "4–5";
+    if (n <= 8) return "6–8";
+    if (n <= 10) return "9–10";
+    if (n <= 12) return "11–12";
+  }
+
+  const hasClassContext = /\b(class|grade|std|standard|कक्षा|ਜਮਾਤ|th|st|nd|rd)\b/i.test(lower);
+  if (s.length > 35 && !hasClassContext) return "";
+
+  const numMatch = lower.match(/\b(1[0-2]|[1-9])\b/);
+  if (numMatch?.[1] && (hasClassContext || /^\s*(1[0-2]|[1-9])\s*$/.test(lower))) {
+    const n = Number(numMatch[1]);
+    if (n <= 3) return "1–3";
+    if (n <= 5) return "4–5";
+    if (n <= 8) return "6–8";
+    if (n <= 10) return "9–10";
+    if (n <= 12) return "11–12";
+  }
+
+  return "";
+}
+
+function mapAgeToClassLevel(age: number): string {
+  if (age >= 5 && age <= 8) return "1–3";
+  if (age >= 9 && age <= 10) return "4–5";
+  if (age >= 11 && age <= 13) return "6–8";
+  if (age >= 14 && age <= 15) return "9–10";
+  if (age >= 16 && age <= 17) return "11–12";
+  if (age >= 18 && age <= 60) return "Young adult";
+  return "";
+}
+
+function normalizePreferredFormat(raw?: string): string {
+  const lower = (raw ?? "").trim().toLowerCase();
+  if (lower.includes("online") || lower.includes("ऑनलाइन") || lower.includes("ਆਨਲਾਈਨ")) {
+    return "Online";
+  }
+  if (lower.includes("either") || lower.includes("both")) {
+    return "Either";
+  }
+  return "In person";
+}
+
+function extractSubjectsFromCallerText(text: string): string {
+  const found: string[] = [];
+  if (/spoken\s*english/i.test(text)) {
+    found.push("Spoken English");
+  } else if (/english|englihs|अंग्रेज़ी|ਅੰਗਰੇਜ਼ੀ/i.test(text)) {
+    found.push("English");
+  }
+  if (/math|maths|mathematics|गणित|ਗਣਿਤ/i.test(text)) found.push("Mathematics");
+  if (/science|विज्ञान|ਵਿਗਿਆਨ/i.test(text)) found.push("Science");
+  if (/digital\s*literacy|basic\s*computer|computers?|कंप्यूटर|ਕੰਪਿਊਟਰ/i.test(text)) {
+    found.push("Digital Literacy");
+  }
+  if (/career\s*readiness|interview|resume/i.test(text)) found.push("Career Readiness");
+  return found.join(", ");
+}
+
+export function extractStudentDraftFromCall(call: SarvamCallRecord): StudentEnrollmentDraft {
+  const vars = call.output_agent_variables;
+  const userLines = call.interaction_transcript
+    .filter((t) => t.role === "user")
+    .map((t) => (t.en_text || t.indic_text || "").trim())
+    .filter(
+      (line) =>
+        line.length > 0 && !/using a voice assistant to convert your voice to text/i.test(line),
+    );
+  const userText = userLines.join(" ");
+
+  let firstName = sanitizePersonName(vars.name);
+  if (!firstName && userText) {
+    const nameMatch = userText.match(
+      /(?:my name is|i am|i'm|student(?:'s)? name(?: is)?|child(?:'s)? name(?: is)?|daughter(?:'s)? name(?: is)?|son(?:'s)? name(?: is)?|daughter|son|grandson|granddaughter|मेरा नाम|बच्चे का नाम)\s+([A-Za-z]{2,24})/i,
+    );
+    const candidate = nameMatch?.[1]?.trim() ?? "";
+    if (
+      candidate &&
+      !TRANSCRIPT_NAME_STOPWORDS.has(candidate.toLowerCase()) &&
+      !PLACEHOLDER_NAME_RE.test(candidate)
+    ) {
+      firstName = candidate.charAt(0).toUpperCase() + candidate.slice(1);
+    }
+  }
+
+  let guardianEmail = sanitizeEmail(vars.email);
+  if (!guardianEmail) {
+    guardianEmail = sanitizeEmail(call.user_phone_number);
+  }
+  if (!guardianEmail && userText) {
+    const emailMatch = userText.match(/[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+/);
+    if (emailMatch?.[0]) {
+      guardianEmail = sanitizeEmail(emailMatch[0]);
+    }
+  }
+
+  const guardianPhone = sanitizePhone(call.user_phone_number);
+
+  let classLevel = normalizeClassLevel(vars.classLevel);
+  if (!classLevel && userText) {
+    const explicitClassMatch = userText.match(
+      /\b(?:class|grade|std|standard|कक्षा|ਜਮਾਤ)\s*(1[0-2]|[1-9])\b|\b(young\s*adult|college)\b/i,
+    );
+    if (explicitClassMatch?.[0]) {
+      classLevel = normalizeClassLevel(explicitClassMatch[0]);
+    }
+  }
+  if (!classLevel && userText) {
+    const ageMatch =
+      userText.match(/\b(?:i am|i'm|age(?: is)?|he is|she is|daughter is|son is)\s*(\d{1,2})\b/i) ??
+      userText.match(/\b(\d{1,2})\s*years?\s*old\b/i);
+    if (ageMatch?.[1]) {
+      classLevel = mapAgeToClassLevel(Number(ageMatch[1]));
+    }
+  }
+
+  let subjectsNeeded = sanitizeSubjectsText(vars.subjects);
+  if (!subjectsNeeded && userText) {
+    subjectsNeeded = extractSubjectsFromCallerText(userText);
+  }
+
+  const preferredLanguage =
+    (vars.language ?? "").trim() ||
+    (call.detected_language === "hi-IN"
+      ? "Hindi"
+      : call.detected_language === "pa-IN"
+        ? "Punjabi"
+        : "English");
+
+  const formatSource = vars.format || userText;
+  const preferredFormat = normalizePreferredFormat(formatSource);
+
+  const rawMsg = (vars.message ?? "").trim();
+  const isGenericMsg =
+    !rawMsg ||
+    /^inbound helpline call to\b/i.test(rawMsg) ||
+    /using a voice assistant to convert your voice to text/i.test(rawMsg);
+  const learningGoals = (!isGenericMsg ? rawMsg : userLines.join(" · ")).slice(0, 500);
+
+  const prefilledFields: string[] = [];
+  if (firstName) prefilledFields.push("Student name");
+  if (classLevel) prefilledFields.push("Class level");
+  if (subjectsNeeded) prefilledFields.push("Subjects");
+  if (guardianPhone) prefilledFields.push("Phone");
+  if (guardianEmail) prefilledFields.push("Email");
+  if (preferredLanguage) prefilledFields.push("Language");
+  if (learningGoals) prefilledFields.push("Notes");
+
+  return {
+    first_name: firstName,
+    guardian_name: "",
+    guardian_email: guardianEmail,
+    guardian_phone: guardianPhone,
+    class_level: classLevel,
+    subjects_needed: subjectsNeeded,
+    preferred_language: preferredLanguage,
+    preferred_format: preferredFormat,
+    learning_goals: learningGoals,
+    guardian_consent: Boolean(vars.consent),
+    prefilledFields,
+  };
+}
+
+export function extractStudentDraftFromEnquiry(item: AdminEnquiryItem): StudentEnrollmentDraft {
+  const d = item.details;
+  const strDetail = (key: string): string =>
+    typeof d[key] === "string" ? (d[key] as string).trim() : "";
+
+  const firstName = sanitizePersonName(item.name);
+  const guardianEmail = sanitizeEmail(item.email);
+  const guardianPhone = sanitizePhone(strDetail("caller") || strDetail("phone"));
+  const classLevel = normalizeClassLevel(strDetail("classLevel"));
+  const subjectsNeeded =
+    sanitizeSubjectsText(strDetail("subjects")) ||
+    extractSubjectsFromCallerText(strDetail("message"));
+  const preferredLanguage = strDetail("language") || "Hindi and English";
+  const preferredFormat = normalizePreferredFormat(strDetail("format"));
+  const learningGoals = strDetail("message").slice(0, 500);
+
+  const prefilledFields: string[] = [];
+  if (firstName) prefilledFields.push("Student name");
+  if (classLevel) prefilledFields.push("Class level");
+  if (subjectsNeeded) prefilledFields.push("Subjects");
+  if (guardianPhone) prefilledFields.push("Phone");
+  if (guardianEmail) prefilledFields.push("Email");
+  if (preferredLanguage) prefilledFields.push("Language");
+  if (learningGoals) prefilledFields.push("Notes");
+
+  return {
+    first_name: firstName,
+    guardian_name: "",
+    guardian_email: guardianEmail,
+    guardian_phone: guardianPhone,
+    class_level: classLevel,
+    subjects_needed: subjectsNeeded,
+    preferred_language: preferredLanguage,
+    preferred_format: preferredFormat,
+    learning_goals: learningGoals,
+    guardian_consent: Boolean(item.consent),
+    prefilledFields,
+  };
+}
+
 function ensureIsoUtc(raw: unknown, fallbackIso: string): string {
   const s = typeof raw === "string" ? raw.trim() : "";
   if (!s) return fallbackIso;
@@ -430,6 +763,7 @@ export function normalizeSarvamWebhookObject(obj: Record<string, unknown>): Sarv
 
   const displayName =
     nonEmptyStr(varsRaw["name"]) ||
+    nonEmptyStr(varsRaw["user_name"]) ||
     nonEmptyStr(varsRaw["student_name"]) ||
     nonEmptyStr(varsRaw["caller_name"]) ||
     `Caller ${callerPhone}`;
@@ -739,7 +1073,7 @@ function extractEntities(text: string): Partial<ChatSessionState> {
   }
 
   const subjectsFound: string[] = [];
-  if (/english|अंग्रेज़ी|ਅੰਗਰੇਜ਼ੀ/i.test(text)) subjectsFound.push("English");
+  if (/englihs|english|अंग्रेज़ी|ਅੰਗਰੇਜ਼ੀ/i.test(text)) subjectsFound.push("English");
   if (/math|maths|mathematics|गणित|ਗਣਿਤ/i.test(text)) subjectsFound.push("Mathematics");
   if (/science|विज्ञान|ਵਿਗਿਆਨ/i.test(text)) subjectsFound.push("Science");
   if (/computer|digital|कंप्यूटर|ਕੰਪਿਊਟਰ/i.test(text)) subjectsFound.push("Digital Literacy");
@@ -1137,23 +1471,54 @@ export function generateRabataAgentReply(
   }
 
   // Student slot filler
+  const isGreetingOrAffirmation =
+    /^(hi|hello|hey|namaste|sat sri akal|yes|yeah|yep|yup|ok|okay|sure|haan|ha|हाँ|जी|ਹਾਂ)[!.?]*$/i.test(
+      trimmed,
+    );
+  const withoutEmailPrefix = trimmed
+    .replace(/[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+/g, "")
+    .replace(/[,:;]+/g, " ")
+    .trim();
+
+  if (
+    !updated.name &&
+    entities.email &&
+    withoutEmailPrefix &&
+    /^[A-Za-z][A-Za-z\s'.-]{1,40}$/.test(withoutEmailPrefix) &&
+    !/^(hi|hello|hey|namaste|yes|haan|ha|ok|okay|my|email|is)$/i.test(withoutEmailPrefix)
+  ) {
+    updated.name = withoutEmailPrefix.charAt(0).toUpperCase() + withoutEmailPrefix.slice(1);
+  }
+
   if (
     !updated.name &&
     !entities.email &&
+    !trimmed.includes("@") &&
     !isQuestionPhrase &&
-    !/^(yes|haan|ha|हाँ|ਹਾਂ)$/i.test(trimmed)
+    !isGreetingOrAffirmation
   ) {
     updated.name = trimmed.slice(0, 60);
-  } else if (updated.name && updated.email && !updated.classLevel && !isQuestionPhrase) {
-    updated.classLevel = trimmed.slice(0, 30);
+  } else if (
+    updated.name &&
+    updated.email &&
+    !updated.classLevel &&
+    !entities.email &&
+    !trimmed.includes("@") &&
+    !isQuestionPhrase &&
+    !isGreetingOrAffirmation
+  ) {
+    updated.classLevel = normalizeClassLevel(trimmed) || trimmed.slice(0, 30);
   } else if (
     updated.name &&
     updated.email &&
     updated.classLevel &&
     !updated.subjects &&
-    !isQuestionPhrase
+    !entities.email &&
+    !trimmed.includes("@") &&
+    !isQuestionPhrase &&
+    !isGreetingOrAffirmation
   ) {
-    updated.subjects = trimmed.slice(0, 180);
+    updated.subjects = sanitizeSubjectsText(trimmed) || trimmed.slice(0, 180);
   }
 
   const next = getNextMissingPrompt(updated, lang);

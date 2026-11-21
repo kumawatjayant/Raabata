@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
-import { Check, Link2, Mail, PhoneCall, Plus, Trash2, UserPlus, X } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { Check, Link2, Mail, PhoneCall, Plus, Sparkles, Trash2, UserPlus, X } from "lucide-react";
 import { AdminModal } from "@/components/admin-modal";
 import { AdminSarvamCallTracker } from "@/components/admin-sarvam-tracker";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,17 @@ import {
   type ProgressLogRow,
   type StudentRecordRow,
 } from "@/lib/platform";
-import type { SarvamCallRecord } from "@/lib/sarvam-agent";
+import {
+  extractStudentDraftFromCall,
+  extractStudentDraftFromEnquiry,
+  markInteractionEnrolled,
+  readEnrolledInteractionIds,
+  updateSarvamCallStatus,
+  type SarvamCallRecord,
+} from "@/lib/sarvam-agent";
+
+type EnrollModalTarget =
+  { source: "call"; call: SarvamCallRecord } | { source: "enquiry"; enquiry: AdminEnquiryItem };
 
 export function AdminAccessAndEnquiriesPanel({
   roles,
@@ -31,6 +41,14 @@ export function AdminAccessAndEnquiriesPanel({
   const qc = useQueryClient();
   const [subTab, setSubTab] = useState<"calls" | "inbox">("calls");
   const [kindFilter, setKindFilter] = useState<"all" | "student" | "volunteer" | "contact">("all");
+  const [enrolledInteractionIds, setEnrolledInteractionIds] = useState<string[]>([]);
+  const [enrollModalTarget, setEnrollModalTarget] = useState<EnrollModalTarget | null>(null);
+  const [enrollError, setEnrollError] = useState("");
+  const [savingEnroll, setSavingEnroll] = useState(false);
+
+  useEffect(() => {
+    setEnrolledInteractionIds(readEnrolledInteractionIds());
+  }, []);
 
   async function review(id: string, decision: "active" | "rejected") {
     if (shouldUseLocalMode()) {
@@ -58,75 +76,101 @@ export function AdminAccessAndEnquiriesPanel({
     qc.invalidateQueries({ queryKey: ["admin-dashboard"] });
   }
 
-  async function convertEnquiryToStudent(item: AdminEnquiryItem) {
-    const d = item.details;
-    const classLevel =
-      typeof d["classLevel"] === "string" && d["classLevel"] ? d["classLevel"] : "1–3";
-    const subjects =
-      typeof d["subjects"] === "string" && d["subjects"] ? d["subjects"] : "General support";
-    const language =
-      typeof d["language"] === "string" && d["language"] ? d["language"] : "Hindi and English";
-    const format = typeof d["format"] === "string" && d["format"] ? d["format"] : "In person";
-    const notes = typeof d["message"] === "string" ? d["message"] : null;
+  async function confirmEnrollStudent(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!enrollModalTarget) return;
+    setEnrollError("");
+    const form = e.currentTarget;
+    const v = Object.fromEntries(new FormData(form)) as Record<string, string>;
+
+    const firstName = (v["first_name"] ?? "").trim().slice(0, 100);
+    const classLevel = (v["class_level"] ?? "").trim().slice(0, 40);
+    const subjectsNeeded = (v["subjects_needed"] ?? "").trim().slice(0, 300);
+    const guardianName = (v["guardian_name"] ?? "").trim().slice(0, 120) || null;
+    const guardianEmail = (v["guardian_email"] ?? "").trim().slice(0, 255);
+    const guardianPhone = (v["guardian_phone"] ?? "").trim().slice(0, 40) || null;
+    const preferredLanguage =
+      (v["preferred_language"] ?? "").trim().slice(0, 80) || "Hindi and English";
+    const preferredFormat = (v["preferred_format"] ?? "").trim().slice(0, 80) || "In person";
+    const learningGoals = (v["learning_goals"] ?? "").trim().slice(0, 1000) || null;
+    const consentChecked = v["guardian_consent"] === "on";
+
+    if (!firstName || !classLevel || !subjectsNeeded) {
+      setEnrollError("Student name, class level, and subjects needed are required.");
+      return;
+    }
+    if (!guardianEmail && !guardianPhone) {
+      setEnrollError("Provide at least a parent/guardian phone number or email address.");
+      return;
+    }
+    if (!consentChecked) {
+      setEnrollError("Confirm parent/guardian consent before enrolling this student.");
+      return;
+    }
+
+    setSavingEnroll(true);
+    const now = new Date().toISOString();
+    const rec: StudentRecordRow = {
+      id: makeLocalId("stu"),
+      student_user_id: null,
+      first_name: firstName,
+      guardian_name: guardianName,
+      guardian_email: guardianEmail,
+      guardian_phone: guardianPhone,
+      class_level: classLevel,
+      subjects_needed: subjectsNeeded,
+      preferred_language: preferredLanguage,
+      preferred_format: preferredFormat,
+      learning_goals: learningGoals,
+      attendance_count: 0,
+      total_sessions: 0,
+      progress_summary: null,
+      status: "active",
+      guardian_consent: true,
+      created_by: null,
+      created_at: now,
+      updated_at: now,
+    };
 
     const saveLocal = () => {
-      const now = new Date().toISOString();
-      const rec: StudentRecordRow = {
-        id: makeLocalId("stu"),
-        student_user_id: null,
-        first_name: item.name.slice(0, 100),
-        guardian_name: null,
-        guardian_email: item.email,
-        guardian_phone: null,
-        class_level: classLevel.slice(0, 40),
-        subjects_needed: subjects.slice(0, 300),
-        preferred_language: language.slice(0, 80),
-        preferred_format: format.slice(0, 80),
-        learning_goals: notes ? notes.slice(0, 1000) : null,
-        attendance_count: 0,
-        total_sessions: 0,
-        progress_summary: null,
-        status: "active",
-        guardian_consent: true,
-        created_by: null,
-        created_at: now,
-        updated_at: now,
-      };
       updateLocalDb((db) => ({ ...db, student_records: [rec, ...db.student_records] }));
     };
 
     if (shouldUseLocalMode()) {
       saveLocal();
-      onStatus(
-        `Added ${item.name} to Student Roster. You can assign a mentor under Mentors & Roster.`,
-      );
-      qc.invalidateQueries({ queryKey: ["admin-dashboard"] });
-      return;
+    } else {
+      const { error } = await supabase.from("student_records").insert({
+        first_name: rec.first_name,
+        guardian_name: rec.guardian_name,
+        guardian_email: rec.guardian_email,
+        guardian_phone: rec.guardian_phone,
+        class_level: rec.class_level,
+        subjects_needed: rec.subjects_needed,
+        preferred_language: rec.preferred_language,
+        preferred_format: rec.preferred_format,
+        learning_goals: rec.learning_goals,
+        guardian_consent: true,
+      });
+
+      if (shouldUseLocalMode(error)) {
+        saveLocal();
+      } else if (error) {
+        setSavingEnroll(false);
+        setEnrollError(`Could not add student: ${error.message}`);
+        return;
+      }
     }
 
-    const { error } = await supabase.from("student_records").insert({
-      first_name: item.name.slice(0, 100),
-      guardian_email: item.email,
-      class_level: classLevel.slice(0, 40),
-      subjects_needed: subjects.slice(0, 300),
-      preferred_language: language.slice(0, 80),
-      preferred_format: format.slice(0, 80),
-      learning_goals: notes ? notes.slice(0, 1000) : null,
-      guardian_consent: true,
-    });
-
-    if (shouldUseLocalMode(error)) {
-      saveLocal();
-      onStatus(`Added ${item.name} to Student Roster.`);
-      qc.invalidateQueries({ queryKey: ["admin-dashboard"] });
-      return;
+    if (enrollModalTarget.source === "call") {
+      updateSarvamCallStatus(enrollModalTarget.call.id, "enrolled");
+      setEnrolledInteractionIds(markInteractionEnrolled(enrollModalTarget.call.interaction_id));
     }
 
-    if (error) {
-      onStatus(`Could not create student record: ${error.message}`, true);
-      return;
-    }
-    onStatus(`Added ${item.name} to Student Roster.`);
+    setSavingEnroll(false);
+    setEnrollModalTarget(null);
+    onStatus(
+      `Added ${firstName} (Class ${classLevel}) to Student Roster. You can assign a mentor under Mentors & Roster.`,
+    );
     qc.invalidateQueries({ queryKey: ["admin-dashboard"] });
   }
 
@@ -135,24 +179,26 @@ export function AdminAccessAndEnquiriesPanel({
   );
   const nonAdminRoles = roles.filter((r) => r.role !== "admin");
 
-  async function enrollCall(call: SarvamCallRecord) {
-    const vars = call.output_agent_variables;
-    await convertEnquiryToStudent({
-      id: call.id,
-      created_at: call.start_datetime,
-      kind: vars.kind,
-      name: vars.name,
-      email: vars.email,
-      consent: true,
-      details: {
-        classLevel: vars.classLevel ?? "6–8",
-        subjects: vars.subjects ?? "General support",
-        language: vars.language ?? "Hindi and English",
-        format: vars.format ?? "In person",
-        message: vars.message,
-      },
-    });
-  }
+  const enrollDraft = enrollModalTarget
+    ? enrollModalTarget.source === "call"
+      ? extractStudentDraftFromCall(enrollModalTarget.call)
+      : extractStudentDraftFromEnquiry(enrollModalTarget.enquiry)
+    : null;
+  const enrollModalKey = enrollModalTarget
+    ? enrollModalTarget.source === "call"
+      ? `call-${enrollModalTarget.call.interaction_id}`
+      : `enq-${enrollModalTarget.enquiry.id}`
+    : "closed";
+  const callerTranscriptHighlights =
+    enrollModalTarget?.source === "call"
+      ? enrollModalTarget.call.interaction_transcript.filter(
+          (t) =>
+            t.role === "user" &&
+            !/using a voice assistant to convert your voice to text/i.test(
+              t.en_text || t.indic_text || "",
+            ),
+        )
+      : [];
 
   return (
     <div className="space-y-6">
@@ -178,7 +224,14 @@ export function AdminAccessAndEnquiriesPanel({
       </div>
 
       {subTab === "calls" && (
-        <AdminSarvamCallTracker dbEnquiries={enquiries} onEnrollCall={enrollCall} />
+        <AdminSarvamCallTracker
+          dbEnquiries={enquiries}
+          enrolledInteractionIds={enrolledInteractionIds}
+          onRequestEnrollCall={(call) => {
+            setEnrollError("");
+            setEnrollModalTarget({ source: "call", call });
+          }}
+        />
       )}
 
       {subTab === "inbox" && (
@@ -231,17 +284,21 @@ export function AdminAccessAndEnquiriesPanel({
                         </td>
                         <td style={{ textAlign: "right" }}>
                           {r.status === "pending" && (
-                            <div className="inline-flex gap-2">
-                              <Button size="sm" onClick={() => review(r.id, "active")}>
-                                <Check size={14} /> Approve
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
+                            <div className="admin-actions">
+                              <button
+                                type="button"
+                                className="admin-action-btn admin-action-btn-success"
+                                onClick={() => review(r.id, "active")}
+                              >
+                                <Check size={13} /> Approve
+                              </button>
+                              <button
+                                type="button"
+                                className="admin-action-btn admin-action-btn-secondary"
                                 onClick={() => review(r.id, "rejected")}
                               >
-                                <X size={14} /> Reject
-                              </Button>
+                                <X size={13} /> Reject
+                              </button>
                             </div>
                           )}
                         </td>
@@ -316,13 +373,18 @@ export function AdminAccessAndEnquiriesPanel({
                         </td>
                         <td style={{ textAlign: "right" }}>
                           {item.kind === "student" && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => convertEnquiryToStudent(item)}
-                            >
-                              <UserPlus size={14} /> Enroll Student
-                            </Button>
+                            <div className="admin-actions">
+                              <button
+                                type="button"
+                                className="admin-action-btn admin-action-btn-primary"
+                                onClick={() => {
+                                  setEnrollError("");
+                                  setEnrollModalTarget({ source: "enquiry", enquiry: item });
+                                }}
+                              >
+                                <UserPlus size={13} /> Enroll
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -334,6 +396,178 @@ export function AdminAccessAndEnquiriesPanel({
           </div>
         </div>
       )}
+
+      <AdminModal
+        open={Boolean(enrollModalTarget && enrollDraft)}
+        title="Review & Enroll Student"
+        subtitle={
+          enrollModalTarget?.source === "call"
+            ? `Review pre-filled details from ${
+                enrollModalTarget.call.channel === "sarvam_voice_call"
+                  ? "the phone call transcript"
+                  : "the website chat"
+              } before adding to the roster.`
+            : "Verify extracted registration details before adding this learner to the Student Roster."
+        }
+        onClose={() => {
+          setEnrollError("");
+          setEnrollModalTarget(null);
+        }}
+      >
+        {enrollModalTarget && enrollDraft && (
+          <form key={enrollModalKey} onSubmit={confirmEnrollStudent} className="space-y-4">
+            {enrollDraft.prefilledFields.length > 0 && (
+              <div className="trust-banner text-xs">
+                <Sparkles size={15} />
+                <div>
+                  <strong>Pre-filled automatically:</strong>{" "}
+                  {enrollDraft.prefilledFields.join(" · ")}. Review or edit any field below before
+                  saving.
+                </div>
+              </div>
+            )}
+
+            {callerTranscriptHighlights.length > 0 && (
+              <div className="enroll-transcript-preview">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
+                  Caller transcript highlights
+                </div>
+                <div className="space-y-1 text-xs text-foreground">
+                  {callerTranscriptHighlights.map((turn, idx) => (
+                    <div key={`${turn.turn_id}-${idx}`}>
+                      &ldquo;{turn.indic_text || turn.en_text}&rdquo;
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {enrollError && (
+              <div role="alert" className="form-status form-error mb-0">
+                {enrollError}
+              </div>
+            )}
+
+            <div className="form-grid">
+              <label className="field">
+                Student’s first name *
+                <input
+                  name="first_name"
+                  required
+                  maxLength={100}
+                  defaultValue={enrollDraft.first_name}
+                  placeholder="Enter student first name"
+                />
+              </label>
+              <label className="field">
+                Class *
+                <select name="class_level" required defaultValue={enrollDraft.class_level}>
+                  <option value="" disabled>
+                    Select class
+                  </option>
+                  {CLASS_LEVELS.filter((c) => c !== "All").map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field wide">
+                Subjects or skills needed *
+                <input
+                  name="subjects_needed"
+                  required
+                  maxLength={300}
+                  defaultValue={enrollDraft.subjects_needed}
+                  placeholder="e.g. Spoken English, Mathematics, Science"
+                />
+              </label>
+              <label className="field">
+                Guardian / caller phone
+                <input
+                  name="guardian_phone"
+                  maxLength={40}
+                  defaultValue={enrollDraft.guardian_phone}
+                  placeholder="+91..."
+                />
+              </label>
+              <label className="field">
+                Parent / guardian email
+                <input
+                  name="guardian_email"
+                  type="email"
+                  maxLength={255}
+                  defaultValue={enrollDraft.guardian_email}
+                  placeholder="Optional if phone provided"
+                />
+              </label>
+              <label className="field">
+                Parent / guardian name
+                <input
+                  name="guardian_name"
+                  maxLength={120}
+                  defaultValue={enrollDraft.guardian_name}
+                  placeholder="Optional"
+                />
+              </label>
+              <label className="field">
+                Preferred language
+                <input
+                  name="preferred_language"
+                  maxLength={80}
+                  defaultValue={enrollDraft.preferred_language}
+                />
+              </label>
+              <label className="field">
+                Format
+                <select name="preferred_format" defaultValue={enrollDraft.preferred_format}>
+                  <option value="In person">In person</option>
+                  <option value="Online">Online</option>
+                  <option value="Either">Either</option>
+                </select>
+              </label>
+              <label className="field wide">
+                Notes &amp; learning goals
+                <textarea
+                  name="learning_goals"
+                  maxLength={1000}
+                  defaultValue={enrollDraft.learning_goals}
+                  placeholder="Summary from call or learning needs"
+                />
+              </label>
+            </div>
+
+            <label className="consent">
+              <input
+                type="checkbox"
+                name="guardian_consent"
+                required
+                defaultChecked={enrollDraft.guardian_consent}
+              />
+              <span>
+                Parent/guardian or adult learner consent verified to store these learning details in
+                the Student Roster.
+              </span>
+            </label>
+
+            <div className="pt-2 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setEnrollError("");
+                  setEnrollModalTarget(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={savingEnroll}>
+                <UserPlus size={14} /> {savingEnroll ? "Enrolling..." : "Confirm & Enroll Student"}
+              </Button>
+            </div>
+          </form>
+        )}
+      </AdminModal>
     </div>
   );
 }
@@ -647,7 +881,15 @@ export function AdminDatabasePanel({
                     </td>
                     <td className="text-xs text-muted-foreground">{s.subjects_needed}</td>
                     <td className="text-xs text-muted-foreground">
-                      {s.guardian_name || "Guardian"} · {s.guardian_email}
+                      {[
+                        s.guardian_name,
+                        s.guardian_phone,
+                        s.guardian_email && !s.guardian_email.endsWith(".local")
+                          ? s.guardian_email
+                          : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" · ") || "Guardian"}
                     </td>
                     <td>
                       {s.attendance_count}/{s.total_sessions}

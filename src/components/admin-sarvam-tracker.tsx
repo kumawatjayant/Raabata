@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  CheckCircle2,
   Clock,
+  FileText,
   MessageCircle,
   MessageSquareText,
   Phone,
@@ -13,9 +15,9 @@ import { Button } from "@/components/ui/button";
 import type { AdminEnquiryItem } from "@/lib/enquiries.functions";
 import {
   convertEnquiriesToSarvamCalls,
+  extractStudentDraftFromCall,
   readStoredWebCalls,
   SEEDED_SARVAM_CALLS,
-  updateSarvamCallStatus,
   type SarvamCallRecord,
 } from "@/lib/sarvam-agent";
 import { site } from "@/lib/site";
@@ -36,10 +38,12 @@ function formatDuration(seconds: number): string {
 
 export function AdminSarvamCallTracker({
   dbEnquiries,
-  onEnrollCall,
+  enrolledInteractionIds,
+  onRequestEnrollCall,
 }: {
   dbEnquiries: AdminEnquiryItem[];
-  onEnrollCall: (call: SarvamCallRecord) => Promise<void>;
+  enrolledInteractionIds: string[];
+  onRequestEnrollCall: (call: SarvamCallRecord) => void;
 }) {
   const [localCalls, setLocalCalls] = useState<SarvamCallRecord[]>([]);
   const [serverCalls, setServerCalls] = useState<SarvamCallRecord[]>([]);
@@ -108,6 +112,12 @@ export function AdminSarvamCallTracker({
       ? Math.round(allCalls.reduce((sum, c) => sum + Number(c.duration || 0), 0) / allCalls.length)
       : 0;
 
+  const activeCallIsEnrolled = Boolean(
+    activeCall &&
+    (activeCall.status === "enrolled" ||
+      enrolledInteractionIds.includes(activeCall.interaction_id)),
+  );
+
   return (
     <div className="space-y-6">
       <div className="stat-cards">
@@ -139,7 +149,7 @@ export function AdminSarvamCallTracker({
             <UserPlus size={15} /> Student Requests
           </div>
           <div className="stat-value">{studentCallsCount}</div>
-          <small className="stat-note">Ready to add to roster</small>
+          <small className="stat-note">Ready to review &amp; enroll</small>
         </article>
       </div>
 
@@ -166,9 +176,14 @@ export function AdminSarvamCallTracker({
             Website Chat ({allCalls.length - phoneCallsCount})
           </option>
         </select>
-        <Button variant="outline" size="sm" onClick={() => void refreshFromServer()}>
+        <button
+          type="button"
+          className="admin-action-btn admin-action-btn-secondary admin-toolbar-btn"
+          onClick={() => void refreshFromServer()}
+          disabled={refreshing}
+        >
           <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} /> Refresh Calls
-        </Button>
+        </button>
       </div>
 
       <div className="admin-table-wrap">
@@ -176,11 +191,9 @@ export function AdminSarvamCallTracker({
           <thead>
             <tr>
               <th>Date &amp; Time</th>
-              <th>Caller</th>
-              <th>Phone / Contact</th>
+              <th>Caller &amp; Details</th>
               <th>Channel</th>
-              <th>Language</th>
-              <th>Request Type</th>
+              <th>Request &amp; Language</th>
               <th>Duration</th>
               <th>Status</th>
               <th style={{ textAlign: "right" }}>Actions</th>
@@ -189,20 +202,46 @@ export function AdminSarvamCallTracker({
           <tbody>
             {filteredCalls.length === 0 ? (
               <tr>
-                <td colSpan={9} className="text-center text-muted-foreground py-8">
+                <td colSpan={7} className="text-center text-muted-foreground py-8">
                   No recent calls match your search.
                 </td>
               </tr>
             ) : (
               filteredCalls.map((call) => {
                 const vars = call.output_agent_variables;
-                const langName = formatLanguageLabel(call.detected_language, vars.language);
+                const draft = extractStudentDraftFromCall(call);
+                const langName = formatLanguageLabel(
+                  call.detected_language,
+                  draft.preferred_language,
+                );
                 const intentLabel =
                   vars.kind === "student"
                     ? "Student Registration"
                     : vars.kind === "volunteer"
                       ? "Volunteer"
                       : "Enquiry";
+                const isEnrolled =
+                  call.status === "enrolled" ||
+                  enrolledInteractionIds.includes(call.interaction_id);
+
+                const primaryTitle =
+                  draft.first_name || draft.guardian_phone || draft.guardian_email || vars.name;
+                const contactLine = [
+                  draft.guardian_phone && draft.guardian_phone !== primaryTitle
+                    ? draft.guardian_phone
+                    : "",
+                  draft.guardian_email && draft.guardian_email !== primaryTitle
+                    ? draft.guardian_email
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
+                const summaryLine = [
+                  draft.class_level ? `Class ${draft.class_level}` : "",
+                  draft.subjects_needed,
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
 
                 return (
                   <tr key={call.id}>
@@ -214,17 +253,17 @@ export function AdminSarvamCallTracker({
                         minute: "2-digit",
                       })}
                     </td>
-                    <td>
-                      <strong>{vars.name}</strong>
-                      {(vars.classLevel || vars.subjects) && (
-                        <div className="text-xs text-muted-foreground">
-                          {vars.classLevel ? `Class ${vars.classLevel}` : ""}
-                          {vars.classLevel && vars.subjects ? " · " : ""}
-                          {vars.subjects ?? ""}
+                    <td style={{ maxWidth: 280 }}>
+                      <strong className="text-foreground">{primaryTitle}</strong>
+                      {contactLine && (
+                        <div className="text-xs text-muted-foreground mt-0.5">{contactLine}</div>
+                      )}
+                      {summaryLine && (
+                        <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                          {summaryLine}
                         </div>
                       )}
                     </td>
-                    <td className="text-xs">{call.user_phone_number}</td>
                     <td>
                       <span
                         className={`pill-badge ${
@@ -242,33 +281,41 @@ export function AdminSarvamCallTracker({
                         )}
                       </span>
                     </td>
-                    <td>{langName}</td>
                     <td>
                       <span className="pill-badge">{intentLabel}</span>
+                      <div className="text-[11px] text-muted-foreground mt-1">{langName}</div>
                     </td>
-                    <td className="whitespace-nowrap">{formatDuration(call.duration)}</td>
+                    <td className="whitespace-nowrap text-xs text-muted-foreground">
+                      {formatDuration(call.duration)}
+                    </td>
                     <td>
-                      <span
-                        className={`pill-badge ${call.status === "enrolled" ? "pill-green" : ""}`}
-                      >
-                        {call.status === "enrolled" ? "Added to Students" : "Received"}
+                      <span className={`pill-badge ${isEnrolled ? "pill-green" : ""}`}>
+                        {isEnrolled ? (
+                          <>
+                            <CheckCircle2 size={11} /> Enrolled
+                          </>
+                        ) : (
+                          "Received"
+                        )}
                       </span>
                     </td>
                     <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                      <div className="inline-flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => setActiveCall(call)}>
-                          View Transcript
-                        </Button>
-                        {vars.kind === "student" && call.status !== "enrolled" && (
-                          <Button
-                            size="sm"
-                            onClick={async () => {
-                              await onEnrollCall(call);
-                              setLocalCalls(updateSarvamCallStatus(call.id, "enrolled"));
-                            }}
+                      <div className="admin-actions">
+                        <button
+                          type="button"
+                          className="admin-action-btn admin-action-btn-secondary"
+                          onClick={() => setActiveCall(call)}
+                        >
+                          <FileText size={13} /> Transcript
+                        </button>
+                        {vars.kind === "student" && !isEnrolled && (
+                          <button
+                            type="button"
+                            className="admin-action-btn admin-action-btn-primary"
+                            onClick={() => onRequestEnrollCall(call)}
                           >
                             <UserPlus size={13} /> Enroll
-                          </Button>
+                          </button>
                         )}
                       </div>
                     </td>
@@ -284,7 +331,10 @@ export function AdminSarvamCallTracker({
         open={Boolean(activeCall)}
         title={
           activeCall
-            ? `Call Transcript · ${activeCall.output_agent_variables.name}`
+            ? `Call Transcript · ${
+                extractStudentDraftFromCall(activeCall).first_name ||
+                activeCall.output_agent_variables.name
+              }`
             : "Call Transcript"
         }
         subtitle={
@@ -303,9 +353,9 @@ export function AdminSarvamCallTracker({
               <div>
                 <strong>Summary:</strong> {activeCall.output_agent_variables.message}
               </div>
-              {activeCall.output_agent_variables.email && (
+              {extractStudentDraftFromCall(activeCall).guardian_email && (
                 <div>
-                  <strong>Email:</strong> {activeCall.output_agent_variables.email}
+                  <strong>Email:</strong> {extractStudentDraftFromCall(activeCall).guardian_email}
                 </div>
               )}
             </div>
@@ -338,19 +388,17 @@ export function AdminSarvamCallTracker({
               <Button variant="outline" onClick={() => setActiveCall(null)}>
                 Close
               </Button>
-              {activeCall.output_agent_variables.kind === "student" &&
-                activeCall.status !== "enrolled" && (
-                  <Button
-                    onClick={async () => {
-                      const target = activeCall;
-                      await onEnrollCall(target);
-                      setLocalCalls(updateSarvamCallStatus(target.id, "enrolled"));
-                      setActiveCall(null);
-                    }}
-                  >
-                    <UserPlus size={14} /> Enroll as Student
-                  </Button>
-                )}
+              {activeCall.output_agent_variables.kind === "student" && !activeCallIsEnrolled && (
+                <Button
+                  onClick={() => {
+                    const target = activeCall;
+                    setActiveCall(null);
+                    onRequestEnrollCall(target);
+                  }}
+                >
+                  <UserPlus size={14} /> Review &amp; Enroll Student
+                </Button>
+              )}
             </div>
           </div>
         )}
