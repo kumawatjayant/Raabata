@@ -13,6 +13,7 @@ type ServerEntry = {
 };
 
 let serverEntryPromise: Promise<ServerEntry> | undefined;
+let cachedAppId: string | undefined;
 const recentServerCalls: SarvamCallRecord[] = [];
 
 async function getServerEntry(): Promise<ServerEntry> {
@@ -29,6 +30,95 @@ function jsonResponse(data: unknown, status = 200): Response {
     status,
     headers: { "content-type": "application/json; charset=utf-8" },
   });
+}
+
+async function resolveSamvaadAppId(
+  apiKey: string,
+  orgId: string,
+  workspaceId: string,
+): Promise<string | null> {
+  const configured = process.env["SARVAM_APP_ID"]?.trim();
+  if (configured) return configured;
+  if (cachedAppId) return cachedAppId;
+
+  try {
+    const url = `https://apps.sarvam.ai/api/app-authoring/v1/orgs/${encodeURIComponent(orgId)}/workspaces/${encodeURIComponent(workspaceId)}/deployments`;
+    const res = await fetch(url, { headers: { "X-API-Key": apiKey } });
+    if (!res.ok) return null;
+    const json = (await res.json()) as {
+      items?: Array<{ app_id?: string; status?: string; phone_numbers?: string[] }>;
+    };
+    const items = json.items ?? [];
+    const matched =
+      items.find((d) => d.phone_numbers?.includes("+917965481661")) ??
+      items.find((d) => d.status === "active") ??
+      items[0];
+    if (matched?.app_id) {
+      cachedAppId = matched.app_id;
+      return matched.app_id;
+    }
+  } catch {
+    // ignore discovery failures
+  }
+  return null;
+}
+
+async function fetchLiveSarvamInteractions(): Promise<{
+  liveConnected: boolean;
+  calls: SarvamCallRecord[];
+}> {
+  const apiKey = (
+    process.env["SARVAM_SAMVAAD_API_KEY"] ||
+    process.env["SARVAM_API_KEY"] ||
+    ""
+  ).trim();
+  const orgId = (process.env["SARVAM_ORG_ID"] || "").trim();
+  const workspaceId = (process.env["SARVAM_WORKSPACE_ID"] || "").trim();
+
+  if (!apiKey || !orgId || !workspaceId) {
+    return { liveConnected: false, calls: [] };
+  }
+
+  const appId = await resolveSamvaadAppId(apiKey, orgId, workspaceId);
+  if (!appId) {
+    return { liveConnected: false, calls: [] };
+  }
+
+  try {
+    const now = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const analyticsUrl = new URL(
+      `https://apps.sarvam.ai/api/analytics/v1/${encodeURIComponent(orgId)}/${encodeURIComponent(workspaceId)}/${encodeURIComponent(appId)}/interactions`,
+    );
+    analyticsUrl.searchParams.set("start_datetime", thirtyDaysAgo);
+    analyticsUrl.searchParams.set("end_datetime", now);
+    analyticsUrl.searchParams.set("include_transcript", "true");
+    analyticsUrl.searchParams.set("limit", "50");
+
+    const res = await fetch(analyticsUrl.toString(), {
+      headers: { "X-API-Key": apiKey },
+    });
+    if (!res.ok) {
+      return { liveConnected: false, calls: [] };
+    }
+    const json = (await res.json()) as Record<string, unknown>;
+    const rawList = Array.isArray(json["items"])
+      ? json["items"]
+      : Array.isArray(json["interactions"])
+        ? json["interactions"]
+        : Array.isArray(json["data"])
+          ? json["data"]
+          : [];
+
+    const calls = (rawList as Array<Record<string, unknown>>)
+      .map((item) => normalizeSarvamWebhookObject(item))
+      .sort((a, b) => new Date(b.start_datetime).getTime() - new Date(a.start_datetime).getTime());
+
+    return { liveConnected: true, calls };
+  } catch (err) {
+    console.error("[Sarvam Analytics Fetch]", err);
+    return { liveConnected: false, calls: [] };
+  }
 }
 
 async function verifySarvamSignature(
@@ -94,13 +184,8 @@ async function handleApiRoute(request: Request): Promise<Response | null> {
           p_email: vars.email,
           p_consent: true,
           p_details: {
-            channel:
-              record.channel === "rabata_web_chatbot"
-                ? "Web AI Chatbot (Sarvam)"
-                : "Sarvam AI Voice Call",
+            channel: record.channel === "rabata_web_chatbot" ? "Website Chat" : "Phone Call",
             interaction_id: record.interaction_id,
-            app_id: record.app_id,
-            deployment_id: record.deployment_id,
             caller: record.user_phone_number,
             agent_phone_number: record.agent_phone_number,
             duration: String(record.duration),
@@ -127,75 +212,29 @@ async function handleApiRoute(request: Request): Promise<Response | null> {
   }
 
   if (path === "/api/sarvam-calls" && request.method === "GET") {
-    return jsonResponse({ ok: true, calls: recentServerCalls });
-  }
-
-  if (path === "/api/sarvam-sync" && request.method === "POST") {
-    try {
-      const body = (await request.json()) as {
-        orgId?: string;
-        workspaceId?: string;
-        appId?: string;
-        apiKey?: string;
-        startDatetime?: string;
-        endDatetime?: string;
-      };
-      const apiKey = body.apiKey?.trim() || process.env["SARVAM_API_KEY"] || "";
-      if (!apiKey || !body.orgId || !body.workspaceId || !body.appId) {
-        return jsonResponse(
-          { ok: false, error: "orgId, workspaceId, appId, and Sarvam X-API-Key are required." },
-          400,
-        );
+    const live = await fetchLiveSarvamInteractions();
+    const seen = new Set<string>();
+    const merged: SarvamCallRecord[] = [];
+    for (const item of [...recentServerCalls, ...live.calls]) {
+      if (!seen.has(item.interaction_id)) {
+        seen.add(item.interaction_id);
+        merged.push(item);
       }
-      const endIso = body.endDatetime || new Date().toISOString();
-      const startIso =
-        body.startDatetime || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      const analyticsUrl = new URL(
-        `https://apps.sarvam.ai/api/analytics/v1/${encodeURIComponent(body.orgId)}/${encodeURIComponent(body.workspaceId)}/${encodeURIComponent(body.appId)}/interactions`,
-      );
-      analyticsUrl.searchParams.set("start_datetime", startIso);
-      analyticsUrl.searchParams.set("end_datetime", endIso);
-      analyticsUrl.searchParams.set("include_transcript", "true");
-      analyticsUrl.searchParams.set("limit", "50");
-
-      const upstream = await fetch(analyticsUrl.toString(), {
-        headers: { "X-API-Key": apiKey },
-      });
-      if (!upstream.ok) {
-        const text = await upstream.text().catch(() => "");
-        return jsonResponse(
-          {
-            ok: false,
-            error: `Sarvam Analytics returned HTTP ${upstream.status}: ${text.slice(0, 200)}`,
-          },
-          upstream.status,
-        );
-      }
-      const data = (await upstream.json()) as Record<string, unknown>;
-      const rawList = Array.isArray(data["interactions"])
-        ? data["interactions"]
-        : Array.isArray(data["data"])
-          ? data["data"]
-          : Array.isArray(data)
-            ? data
-            : [];
-      const imported = (rawList as Array<Record<string, unknown>>).map((item) =>
-        normalizeSarvamWebhookObject(item),
-      );
-      for (const rec of imported) {
-        if (!recentServerCalls.some((c) => c.interaction_id === rec.interaction_id)) {
-          recentServerCalls.unshift(rec);
-        }
-      }
-      return jsonResponse({ ok: true, count: imported.length, calls: imported });
-    } catch {
-      return jsonResponse({ ok: false, error: "Unable to query Sarvam Analytics API." }, 502);
     }
+    return jsonResponse({
+      ok: true,
+      liveConnected: live.liveConnected,
+      calls: merged,
+    });
   }
 
   if (path === "/api/sarvam-chat" && request.method === "POST") {
-    const apiKey = process.env["SARVAM_API_KEY"];
-    if (!apiKey) {
+    const rawKey = (
+      process.env["SARVAM_CHAT_API_KEY"] ||
+      process.env["SARVAM_API_KEY"] ||
+      ""
+    ).trim();
+    if (!rawKey || rawKey.startsWith("sk_sam")) {
       return jsonResponse({ ok: false, mode: "local_fallback" }, 200);
     }
     try {
@@ -210,7 +249,7 @@ async function handleApiRoute(request: Request): Promise<Response | null> {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "api-subscription-key": apiKey,
+          "api-subscription-key": rawKey,
         },
         body: JSON.stringify({
           model: process.env["SARVAM_CHAT_MODEL"] || "sarvam-105b",

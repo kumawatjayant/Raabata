@@ -273,21 +273,23 @@ export const SEEDED_SARVAM_CALLS: SarvamCallRecord[] = [
   },
 ];
 
-const SARVAM_CALLS_STORAGE_KEY = "rabata_sarvam_calls_v1";
+const SARVAM_CALLS_STORAGE_KEY = "rabata_sarvam_calls_v2";
 
-export function readSarvamCalls(): SarvamCallRecord[] {
-  if (typeof window === "undefined") return SEEDED_SARVAM_CALLS;
+export function readStoredWebCalls(): SarvamCallRecord[] {
+  if (typeof window === "undefined") return [];
   try {
     const raw = window.localStorage.getItem(SARVAM_CALLS_STORAGE_KEY);
-    if (!raw) return SEEDED_SARVAM_CALLS;
+    if (!raw) return [];
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed as SarvamCallRecord[];
-    }
+    return Array.isArray(parsed) ? (parsed as SarvamCallRecord[]) : [];
   } catch {
-    // ignore storage errors
+    return [];
   }
-  return SEEDED_SARVAM_CALLS;
+}
+
+export function readSarvamCalls(): SarvamCallRecord[] {
+  const stored = readStoredWebCalls();
+  return stored.length > 0 ? stored : SEEDED_SARVAM_CALLS;
 }
 
 export function writeSarvamCalls(calls: SarvamCallRecord[]): void {
@@ -317,62 +319,95 @@ export function updateSarvamCallStatus(
   return next;
 }
 
+function ensureIsoUtc(raw: unknown, fallbackIso: string): string {
+  const s = typeof raw === "string" ? raw.trim() : "";
+  if (!s) return fallbackIso;
+  if (/[zZ]$|[+-]\d{2}:\d{2}$/.test(s)) return s;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(s)) return `${s}Z`;
+  return s;
+}
+
 export function normalizeSarvamWebhookObject(obj: Record<string, unknown>): SarvamCallRecord {
-  const varsRaw = (
-    obj["output_agent_variables"] &&
-    typeof obj["output_agent_variables"] === "object" &&
-    !Array.isArray(obj["output_agent_variables"])
-      ? (obj["output_agent_variables"] as Record<string, unknown>)
-      : obj["extracted_variables"] &&
-          typeof obj["extracted_variables"] === "object" &&
-          !Array.isArray(obj["extracted_variables"])
-        ? (obj["extracted_variables"] as Record<string, unknown>)
-        : {}
-  ) as Record<string, unknown>;
+  const pickObject = (key: string): Record<string, unknown> | null => {
+    const val = obj[key];
+    return val && typeof val === "object" && !Array.isArray(val)
+      ? (val as Record<string, unknown>)
+      : null;
+  };
+  const varsRaw = (pickObject("output_agent_variables") ??
+    pickObject("agent_variables") ??
+    pickObject("extracted_variables") ??
+    {}) as Record<string, unknown>;
 
+  const originalSource = Array.isArray(obj["original_transcript"])
+    ? (obj["original_transcript"] as unknown[])
+    : [];
+  const translatedSource = Array.isArray(obj["translate_transcript"])
+    ? (obj["translate_transcript"] as unknown[])
+    : [];
   const rawTranscriptSource = Array.isArray(obj["interaction_transcript"])
-    ? obj["interaction_transcript"]
-    : Array.isArray(obj["transcript"])
-      ? obj["transcript"]
-      : Array.isArray(obj["messages"])
-        ? obj["messages"]
-        : [];
+    ? (obj["interaction_transcript"] as unknown[])
+    : translatedSource.length > 0
+      ? translatedSource
+      : originalSource.length > 0
+        ? originalSource
+        : Array.isArray(obj["transcript"])
+          ? (obj["transcript"] as unknown[])
+          : Array.isArray(obj["messages"])
+            ? (obj["messages"] as unknown[])
+            : [];
 
-  const transcript: SarvamTranscriptTurn[] = (rawTranscriptSource as unknown[]).map((item, idx) => {
+  const transcript: SarvamTranscriptTurn[] = rawTranscriptSource.map((item, idx) => {
     if (typeof item === "string") {
       return { turn_id: idx + 1, role: idx % 2 === 0 ? "agent" : "user", en_text: item };
     }
     const turn = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
+    const origTurn =
+      originalSource[idx] && typeof originalSource[idx] === "object"
+        ? (originalSource[idx] as Record<string, unknown>)
+        : null;
     const roleRaw = String(turn["role"] ?? turn["speaker"] ?? "").toLowerCase();
     const role: "agent" | "user" =
       roleRaw === "user" || roleRaw === "caller" || roleRaw === "customer" ? "user" : "agent";
     const enText = String(
       turn["en_text"] ?? turn["text"] ?? turn["content"] ?? turn["indic_text"] ?? "",
-    );
+    ).trim();
     const out: SarvamTranscriptTurn = {
       turn_id: typeof turn["turn_id"] === "number" ? turn["turn_id"] : idx + 1,
       role,
       en_text: enText,
     };
-    if (typeof turn["indic_text"] === "string" && turn["indic_text"].trim()) {
-      out.indic_text = turn["indic_text"];
+    const indicCandidate =
+      typeof turn["indic_text"] === "string" && turn["indic_text"].trim()
+        ? turn["indic_text"].trim()
+        : origTurn && typeof origTurn["text"] === "string"
+          ? origTurn["text"].trim()
+          : "";
+    if (indicCandidate && indicCandidate !== enText) {
+      out.indic_text = indicCandidate;
     }
     return out;
   });
 
-  const intentOrKind = String(
-    varsRaw["kind"] ?? varsRaw["customer_intent"] ?? obj["intent"] ?? "student",
+  const nonEmptyStr = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+  const intentOrKind = (
+    nonEmptyStr(varsRaw["kind"]) ||
+    nonEmptyStr(varsRaw["customer_intent"]) ||
+    nonEmptyStr(obj["intent"]) ||
+    "contact"
   ).toLowerCase();
   const kind: SarvamOutputVariables["kind"] = intentOrKind.includes("volunteer")
     ? "volunteer"
-    : intentOrKind.includes("contact") || intentOrKind.includes("donat")
-      ? "contact"
-      : "student";
+    : intentOrKind.includes("student")
+      ? "student"
+      : "contact";
 
-  const langHint = JSON.stringify(transcript);
-  const detectedLanguage: SarvamCallRecord["detected_language"] = /[\u0900-\u097F]/.test(langHint)
+  const langHint = `${nonEmptyStr(obj["language_name"])} ${nonEmptyStr(varsRaw["language"])} ${JSON.stringify(transcript)}`;
+  const detectedLanguage: SarvamCallRecord["detected_language"] = /hindi|[\u0900-\u097F]/i.test(
+    langHint,
+  )
     ? "hi-IN"
-    : /[\u0A00-\u0A7F]/.test(langHint)
+    : /punjabi|[\u0A00-\u0A7F]/i.test(langHint)
       ? "pa-IN"
       : "en-IN";
 
@@ -382,56 +417,68 @@ export function normalizeSarvamWebhookObject(obj: Record<string, unknown>): Sarv
     .map((t) => t.en_text)
     .join(" | ");
 
-  const callerPhone = String(
-    obj["user_phone_number"] ?? obj["from"] ?? obj["caller_number"] ?? "+9198XXXXXXXX",
-  );
+  const callerPhone =
+    nonEmptyStr(obj["user_phone_number"]) ||
+    nonEmptyStr(obj["user_contact"]) ||
+    nonEmptyStr(obj["user_contact_masked"]) ||
+    nonEmptyStr(obj["from"]) ||
+    nonEmptyStr(obj["caller_number"]) ||
+    "+9198XXXXXXXX";
   const digits = callerPhone.replace(/\D/g, "") || "caller";
-  const rawEmail = String(varsRaw["email"] ?? "");
+  const rawEmail = nonEmptyStr(varsRaw["email"]);
   const safeEmail = rawEmail.includes("@") ? rawEmail : `call.${digits}@voice.rabata.local`;
+
+  const displayName =
+    nonEmptyStr(varsRaw["name"]) ||
+    nonEmptyStr(varsRaw["student_name"]) ||
+    nonEmptyStr(varsRaw["caller_name"]) ||
+    `Caller ${callerPhone}`;
 
   const outputVars: SarvamOutputVariables = {
     kind,
-    name: String(
-      varsRaw["name"] ??
-        varsRaw["student_name"] ??
-        varsRaw["caller_name"] ??
-        `Caller (${callerPhone})`,
-    ).slice(0, 100),
+    name: displayName.slice(0, 100),
     email: safeEmail.slice(0, 255),
-    classLevel: String(varsRaw["classLevel"] ?? varsRaw["class_level"] ?? "6–8"),
-    subjects: String(varsRaw["subjects"] ?? "General Support"),
-    language: String(
-      varsRaw["language"] ??
-        (detectedLanguage === "hi-IN"
-          ? "Hindi"
-          : detectedLanguage === "pa-IN"
-            ? "Punjabi"
-            : "English"),
-    ),
-    format: String(varsRaw["format"] ?? "In person"),
-    message: String(
-      varsRaw["message"] ??
-        varsRaw["summary"] ??
-        (transcriptSummary || `Inbound Sarvam AI Samvaad call to ${site.phoneDisplay}.`),
+    ...(nonEmptyStr(varsRaw["classLevel"] ?? varsRaw["class_level"])
+      ? { classLevel: nonEmptyStr(varsRaw["classLevel"] ?? varsRaw["class_level"]) }
+      : {}),
+    ...(nonEmptyStr(varsRaw["subjects"]) ? { subjects: nonEmptyStr(varsRaw["subjects"]) } : {}),
+    language:
+      nonEmptyStr(varsRaw["language"]) ||
+      nonEmptyStr(obj["language_name"]) ||
+      (detectedLanguage === "hi-IN"
+        ? "Hindi"
+        : detectedLanguage === "pa-IN"
+          ? "Punjabi"
+          : "English"),
+    format: nonEmptyStr(varsRaw["format"]) || "Either",
+    message: (
+      nonEmptyStr(varsRaw["call_summary"]) ||
+      nonEmptyStr(varsRaw["message"]) ||
+      nonEmptyStr(varsRaw["summary"]) ||
+      transcriptSummary ||
+      `Inbound helpline call to ${site.phoneDisplay}.`
     ).slice(0, 2000),
-    consent: varsRaw["consent"] !== false,
-    resolved_intent: String(varsRaw["resolved_intent"] ?? varsRaw["customer_intent"] ?? kind),
+    consent: varsRaw["consent"] === true || varsRaw["consent"] === "true",
+    resolved_intent: nonEmptyStr(varsRaw["resolved_intent"] ?? varsRaw["customer_intent"]) || kind,
   };
 
   return {
     id: makeLocalId("srv"),
-    interaction_id: String(
-      obj["interaction_id"] ??
-        obj["call_id"] ??
-        `${nowIso.slice(0, 10).replace(/-/g, "")}/samvaad-${Date.now()}`,
-    ),
-    app_id: String(obj["app_id"] ?? "rabata-samvaad-helpline"),
-    deployment_id: String(obj["deployment_id"] ?? "rabata-voice-prod-v3"),
+    interaction_id:
+      nonEmptyStr(obj["interaction_id"] ?? obj["call_id"]) ||
+      `${nowIso.slice(0, 10).replace(/-/g, "")}/call-${Date.now()}`,
+    app_id: nonEmptyStr(obj["app_id"]) || "Conversatio-a5f99753-8f4f",
+    deployment_id: nonEmptyStr(obj["deployment_id"]) || "Rabata-inbo-8bb6efed-71ec",
     channel: obj["channel"] === "rabata_web_chatbot" ? "rabata_web_chatbot" : "sarvam_voice_call",
     user_phone_number: callerPhone,
-    agent_phone_number: String(obj["agent_phone_number"] ?? obj["to"] ?? site.phone),
+    agent_phone_number:
+      nonEmptyStr(obj["agent_phone_number"] ?? obj["bot_contact_identifier"] ?? obj["to"]) ||
+      site.phone,
     duration: Number(
-      obj["duration"] ?? obj["duration_seconds"] ?? Math.max(25, transcript.length * 16),
+      obj["duration_in_seconds"] ??
+        obj["duration"] ??
+        obj["duration_seconds"] ??
+        Math.max(15, transcript.length * 10),
     ),
     status:
       obj["status"] === "missed"
@@ -444,9 +491,9 @@ export function normalizeSarvamWebhookObject(obj: Record<string, unknown>): Sarv
     detected_language: detectedLanguage,
     stt_model: "Saaras v2",
     tts_model: "Bulbul v1",
-    llm_model: String(obj["llm_model"] ?? "Sarvam AI Samvaad"),
-    start_datetime: String(obj["start_datetime"] ?? obj["started_at"] ?? nowIso),
-    end_datetime: String(obj["end_datetime"] ?? obj["ended_at"] ?? nowIso),
+    llm_model: nonEmptyStr(obj["llm_model"]) || "Rabata Helpline",
+    start_datetime: ensureIsoUtc(obj["start_datetime"] ?? obj["started_at"], nowIso),
+    end_datetime: ensureIsoUtc(obj["end_datetime"] ?? obj["ended_at"], nowIso),
     output_agent_variables: outputVars,
     interaction_transcript: transcript,
   };

@@ -144,6 +144,7 @@ function Admin() {
             roles: [] as RoleRow[],
             names: {} as Record<string, string>,
             enquiries: [] as AdminEnquiryItem[],
+            liveCallsCount: 0,
             mentors: [] as MentorProfileRow[],
             students: [] as StudentRecordRow[],
             academicProfiles: [],
@@ -159,6 +160,16 @@ function Admin() {
         }
         const db = readLocalDb();
         const academicProfiles = await fetchAccessibleStudentProfiles("admin", localSession.userId);
+        let liveCallsCount = 0;
+        try {
+          const callsRes = await fetch("/api/sarvam-calls");
+          if (callsRes.ok) {
+            const c = (await callsRes.json()) as { calls?: unknown[] };
+            liveCallsCount = Array.isArray(c.calls) ? c.calls.length : 0;
+          }
+        } catch {
+          // ignore offline
+        }
         return {
           isAdmin: true,
           isLocal: true,
@@ -166,6 +177,7 @@ function Admin() {
           roles: db.user_roles,
           names: Object.fromEntries(db.app_profiles.map((p) => [p.user_id, p.display_name])),
           enquiries: readLocalEnquiries() as AdminEnquiryItem[],
+          liveCallsCount,
           mentors: db.mentor_profiles,
           students: db.student_records,
           academicProfiles,
@@ -194,6 +206,7 @@ function Admin() {
           roles: [] as RoleRow[],
           names: {} as Record<string, string>,
           enquiries: [] as AdminEnquiryItem[],
+          liveCallsCount: 0,
           mentors: [] as MentorProfileRow[],
           students: [] as StudentRecordRow[],
           academicProfiles: [],
@@ -269,6 +282,7 @@ function Admin() {
           (profilesRes.data ?? []).map((p) => [p.user_id, p.display_name]),
         ) as Record<string, string>,
         enquiries: mergedEnquiries,
+        liveCallsCount: 0,
         mentors: (localFallback?.mentor_profiles ?? mentorsRes.data ?? []) as MentorProfileRow[],
         students: (localFallback?.student_records ?? studentsRes.data ?? []) as StudentRecordRow[],
         academicProfiles,
@@ -457,7 +471,7 @@ function Admin() {
       id: "access",
       label: "Calls & Enquiries",
       icon: UserCheck,
-      badge: Math.max(3, pendingCount + d.enquiries.length),
+      badge: pendingCount + d.enquiries.length + d.liveCallsCount,
     },
     {
       group: "Operations",

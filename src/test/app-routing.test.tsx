@@ -234,6 +234,32 @@ describe("Platform helpers", () => {
     expect(call.output_agent_variables.name).toBe("Diya");
     expect(call.interaction_transcript).toHaveLength(1);
 
+    // Real Sarvam Samvaad analytics shape (agent_variables, duration_in_seconds, original/translate_transcript)
+    const liveCall = parseSarvamWebhookPayload(
+      JSON.stringify({
+        interaction_id: "20261120/3b2fa9f9-15:00:30-aw19d73d",
+        duration_in_seconds: 90.5,
+        start_datetime: "2026-11-20T09:30:30",
+        language_name: "English",
+        user_contact: "+919876046899",
+        bot_contact_identifier: "+917965481661",
+        agent_variables: {
+          user_name: "Manan",
+          call_summary: "A 15-year-old student called to inquire about classes.",
+          kind: "student",
+          consent: "false",
+        },
+        original_transcript: [{ role: "agent", text: "Hello, welcome to Rabata." }],
+        translate_transcript: [{ role: "agent", text: "Hello, welcome to Rabata." }],
+      }),
+    );
+    expect(liveCall.duration).toBe(90.5);
+    expect(liveCall.user_phone_number).toBe("+919876046899");
+    expect(liveCall.output_agent_variables.kind).toBe("student");
+    expect(liveCall.output_agent_variables.consent).toBe(false);
+    expect(liveCall.start_datetime).toBe("2026-11-20T09:30:30Z");
+    expect(liveCall.interaction_transcript[0]?.indic_text).toBeUndefined();
+
     const state = createInitialChatSession("en");
     const emergency = generateRabataAgentReply("Someone is in danger", state, "en");
     expect(emergency.reply).toContain("112");

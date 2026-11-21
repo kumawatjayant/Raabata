@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button";
 import type { AdminEnquiryItem } from "@/lib/enquiries.functions";
 import {
   convertEnquiriesToSarvamCalls,
-  readSarvamCalls,
+  readStoredWebCalls,
+  SEEDED_SARVAM_CALLS,
   updateSarvamCallStatus,
   type SarvamCallRecord,
 } from "@/lib/sarvam-agent";
@@ -42,6 +43,7 @@ export function AdminSarvamCallTracker({
 }) {
   const [localCalls, setLocalCalls] = useState<SarvamCallRecord[]>([]);
   const [serverCalls, setServerCalls] = useState<SarvamCallRecord[]>([]);
+  const [liveConnected, setLiveConnected] = useState(false);
   const [channelFilter, setChannelFilter] = useState<
     "all" | "sarvam_voice_call" | "rabata_web_chatbot"
   >("all");
@@ -54,9 +56,14 @@ export function AdminSarvamCallTracker({
     try {
       const res = await fetch("/api/sarvam-calls");
       if (res.ok) {
-        const body = (await res.json()) as { ok?: boolean; calls?: SarvamCallRecord[] };
+        const body = (await res.json()) as {
+          ok?: boolean;
+          liveConnected?: boolean;
+          calls?: SarvamCallRecord[];
+        };
         if (body.ok && Array.isArray(body.calls)) {
           setServerCalls(body.calls);
+          setLiveConnected(Boolean(body.liveConnected));
         }
       }
     } catch {
@@ -67,7 +74,7 @@ export function AdminSarvamCallTracker({
   }
 
   useEffect(() => {
-    setLocalCalls(readSarvamCalls());
+    setLocalCalls(readStoredWebCalls());
     void refreshFromServer();
   }, []);
 
@@ -75,14 +82,15 @@ export function AdminSarvamCallTracker({
     const dbDerived = convertEnquiriesToSarvamCalls(dbEnquiries);
     const seen = new Set<string>();
     const combined: SarvamCallRecord[] = [];
-    for (const item of [...serverCalls, ...dbDerived, ...localCalls]) {
+    const fallbackCalls = liveConnected ? [] : SEEDED_SARVAM_CALLS;
+    for (const item of [...serverCalls, ...dbDerived, ...localCalls, ...fallbackCalls]) {
       if (!seen.has(item.interaction_id)) {
         seen.add(item.interaction_id);
         combined.push(item);
       }
     }
     return combined;
-  }, [dbEnquiries, localCalls, serverCalls]);
+  }, [dbEnquiries, liveConnected, localCalls, serverCalls]);
 
   const filteredCalls = allCalls.filter((c) => {
     const matchesChannel = channelFilter === "all" || c.channel === channelFilter;
